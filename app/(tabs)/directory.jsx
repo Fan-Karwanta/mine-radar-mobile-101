@@ -19,6 +19,7 @@ import SearchFilter from '../../components/SearchFilter';
 import DataTable from '../../components/DataTable';
 import CategoryCard from '../../components/CategoryCard';
 import directoryService from '../../services/directoryService';
+import offlineDirectoryService from '../../services/offlineDirectoryService';
 
 // Directory categories
 const categories = [
@@ -66,13 +67,31 @@ export default function Directory() {
     hasNext: false,
     hasPrev: false
   });
+  // Simplified pagination state
   const [loadingMore, setLoadingMore] = useState(false);
+  const ITEMS_PER_PAGE = 20; // Show 20 items at a time
   const [stats, setStats] = useState(null);
   const [filterOptions, setFilterOptions] = useState({
     classifications: [],
     types: [],
     statuses: []
   });
+  
+  // Offline functionality state
+  const [isOnline, setIsOnline] = useState(true);
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [downloadProgress, setDownloadProgress] = useState({
+    national: 0,
+    local: 0,
+    hotspots: 0,
+    overall: 0
+  });
+  const [offlineDataStatus, setOfflineDataStatus] = useState({
+    isDownloaded: false,
+    storageInfo: { total: 0 },
+    lastUpdate: null
+  });
+  const [showDownloadModal, setShowDownloadModal] = useState(false);
 
   useEffect(() => {
     fetchDirectoryData(1, false);
@@ -86,73 +105,104 @@ export default function Directory() {
 
   useEffect(() => {
     fetchStats();
+    checkOfflineDataStatus();
+    checkNetworkStatus();
   }, []);
 
-  const fetchDirectoryData = async (page = 1, append = false) => {
-    if (!selectedCategory) return;
-    
-    if (page === 1) {
-      setLoading(true);
-    } else {
-      setLoadingMore(true);
+  // Check network status and offline data availability
+  const checkNetworkStatus = async () => {
+    const networkStatus = offlineDirectoryService.getNetworkStatus();
+    setIsOnline(networkStatus.isOnline);
+  };
+
+  const checkOfflineDataStatus = async () => {
+    try {
+      const status = await offlineDirectoryService.getDownloadStatus();
+      if (status.success) {
+        setOfflineDataStatus(status.data);
+      }
+    } catch (error) {
+      console.error('Error checking offline data status:', error);
     }
+  };
+
+  // Load more data - works for both online and offline
+  const loadMoreData = async () => {
+    if (loadingMore || !pagination.hasNext) return;
+    
+    setLoadingMore(true);
+    console.log('Loading more data - Current page:', pagination.currentPage, 'Total pages:', pagination.totalPages);
     
     try {
       const params = {
-        page,
-        limit: 20,
-        search: searchQuery || undefined,
+        page: pagination.currentPage + 1,
+        limit: ITEMS_PER_PAGE,
+        search: searchQuery,
         province: selectedProvince !== 'all' ? selectedProvince : undefined,
         status: selectedStatus !== 'all' ? selectedStatus : undefined,
         classification: selectedClassification !== 'all' ? selectedClassification : undefined,
         type: selectedType !== 'all' ? selectedType : undefined
       };
 
-      let response;
-      switch (selectedCategory.id) {
-        case 'national':
-          response = await directoryService.getDirectoryNational(params);
-          break;
-        case 'local':
-          response = await directoryService.getDirectoryLocal(params);
-          break;
-        case 'hotspots':
-          response = await directoryService.getDirectoryHotspots(params);
-          break;
-        default:
-          response = { success: false, data: [] };
-      }
+      const response = await offlineDirectoryService.getDirectoryData(selectedCategory.id, params);
 
       if (response.success) {
-        if (append && page > 1) {
-          setDirectoryData(prev => [...prev, ...(response.data || [])]);
-        } else {
-          setDirectoryData(response.data || []);
-        }
-        setPagination({
-          currentPage: response.pagination?.currentPage || page,
-          totalPages: response.pagination?.totalPages || 1,
-          totalRecords: response.pagination?.totalRecords || response.data?.length || 0,
-          hasNext: response.pagination?.hasNext || false,
-          hasPrev: response.pagination?.hasPrev || false
-        });
+        // Append new data to existing data
+        const newData = [...directoryData, ...response.data];
+        setDirectoryData(newData);
+        setPagination(response.pagination);
       } else {
-        if (!append) setDirectoryData([]);
-        Alert.alert('Error', 'Failed to fetch directory data');
+        Alert.alert('Error', response.error || 'Failed to load more data');
+      }
+    } catch (error) {
+      console.error('Error loading more data:', error);
+      Alert.alert('Error', 'An error occurred while loading more data');
+    } finally {
+      setLoadingMore(false);
+    }
+  };
+
+  // Fetch directory data with consistent pagination
+  const fetchDirectoryData = async (resetData = false) => {
+    if (resetData) {
+      setDirectoryData([]);
+      setPagination(prev => ({ ...prev, currentPage: 1 }));
+    }
+
+    setLoading(true);
+
+    try {
+      const params = {
+        page: resetData ? 1 : pagination.currentPage,
+        limit: ITEMS_PER_PAGE, // Always use pagination for performance
+        search: searchQuery,
+        province: selectedProvince !== 'all' ? selectedProvince : undefined,
+        status: selectedStatus !== 'all' ? selectedStatus : undefined,
+        classification: selectedClassification !== 'all' ? selectedClassification : undefined,
+        type: selectedType !== 'all' ? selectedType : undefined
+      };
+
+      const response = await offlineDirectoryService.getDirectoryData(selectedCategory.id, params);
+
+      if (response.success) {
+        const newData = resetData ? response.data : directoryData;
+        setDirectoryData(newData);
+        setPagination(response.pagination);
+      } else {
+        Alert.alert('Error', response.error || 'Failed to fetch directory data');
       }
     } catch (error) {
       console.error('Error fetching directory data:', error);
-      setDirectoryData([]);
-      Alert.alert('Error', 'Failed to connect to server');
+      Alert.alert('Error', 'An error occurred while fetching data');
     } finally {
       setLoading(false);
-      setLoadingMore(false);
+      setRefreshing(false);
     }
   };
 
   const fetchStats = async () => {
     try {
-      const response = await directoryService.getDirectoryStats();
+      const response = await offlineDirectoryService.getDirectoryStats();
       if (response.success) {
         setStats(response.data);
       }
@@ -211,17 +261,11 @@ export default function Directory() {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await fetchDirectoryData(1, false);
+    await fetchDirectoryData(true);
     await fetchStats();
     setRefreshing(false);
   };
 
-  const loadMoreData = async () => {
-    if (!loadingMore && pagination.hasNext && pagination.currentPage < pagination.totalPages) {
-      console.log('Loading more data - Current page:', pagination.currentPage, 'Total pages:', pagination.totalPages);
-      await fetchDirectoryData(pagination.currentPage + 1, true);
-    }
-  };
 
   const handleRowPress = (record) => {
     setSelectedRecord(record);
@@ -242,6 +286,98 @@ export default function Directory() {
       types: [],
       statuses: []
     });
+  };
+
+  // Download all directory data for offline use
+  const handleDownloadData = async () => {
+    if (!isOnline) {
+      Alert.alert('No Internet', 'Please connect to the internet to download data.');
+      return;
+    }
+
+    // Reset progress before starting
+    setDownloadProgress({
+      national: 0,
+      local: 0,
+      hotspots: 0,
+      overall: 0
+    });
+
+    setIsDownloading(true);
+    setShowDownloadModal(true);
+
+    try {
+      const result = await offlineDirectoryService.downloadAllDirectoryData((progress) => {
+        setDownloadProgress(progress);
+      });
+
+      setIsDownloading(false);
+      setShowDownloadModal(false);
+
+      if (result.success) {
+        // Wait a bit for SQLite operations to complete, then refresh status and data
+        setTimeout(async () => {
+          await checkOfflineDataStatus();
+          await fetchDirectoryData(true); // Refresh the current view
+        }, 1000);
+        
+        const downloadDetails = result.downloadDetails || {};
+        const duplicateDetails = result.duplicateDetails || {};
+        const totalDownloaded = (downloadDetails.national || 0) + (downloadDetails.local || 0) + (downloadDetails.hotspots || 0);
+        
+        // Get actual SQLite counts for verification
+        const actualStats = result.stats || {};
+        const actualTotal = actualStats.total || 0;
+        
+        // Build duplicate information message (for reporting only - all records are saved)
+        let duplicateMessage = '';
+        if (duplicateDetails.total > 0) {
+          duplicateMessage = `\n\n🔄 Duplicate MongoDB IDs Found: ${duplicateDetails.total} records\n• National: ${duplicateDetails.national || 0} duplicate IDs\n• Local: ${duplicateDetails.local || 0} duplicate IDs\n• Hotspots: ${duplicateDetails.hotspots || 0} duplicate IDs\n\n💾 ALL ${totalDownloaded} records saved to SQLite\n(including ${duplicateDetails.total} with duplicate MongoDB IDs)`;
+        }
+        
+        Alert.alert(
+          'Download Complete! 🎉',
+          `Downloaded from MongoDB: ${totalDownloaded} records\n\n📊 MongoDB Records:\n• National: ${downloadDetails.national || 0}\n• Local: ${downloadDetails.local || 0}\n• Hotspots: ${downloadDetails.hotspots || 0}${duplicateMessage}\n\n${actualTotal === totalDownloaded ? '✅ Perfect! All ' + totalDownloaded + ' MongoDB records captured offline!' : actualTotal > 0 ? '✅ Successfully saved ' + actualTotal + ' records to SQLite' : '⚠️ Some records failed to save - check console for details'}`,
+          [{ text: 'OK', style: 'default' }]
+        );
+      } else {
+        Alert.alert('Download Failed', result.error || 'Failed to download data');
+      }
+    } catch (error) {
+      console.error('Download error:', error);
+      setIsDownloading(false);
+      setShowDownloadModal(false);
+      Alert.alert('Download Error', 'An error occurred while downloading data');
+    }
+  };
+
+  // Clear offline data
+  const handleClearOfflineData = async () => {
+    Alert.alert(
+      'Clear Offline Data',
+      'Are you sure you want to clear all offline data? This will free up storage space but you will need internet to view directory data.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Clear',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const result = await offlineDirectoryService.clearOfflineData();
+              if (result.success) {
+                Alert.alert('Success', 'Offline data cleared successfully');
+                await checkOfflineDataStatus();
+              } else {
+                Alert.alert('Error', result.error || 'Failed to clear offline data');
+              }
+            } catch (error) {
+              console.error('Error clearing offline data:', error);
+              Alert.alert('Error', 'An error occurred while clearing offline data');
+            }
+          }
+        }
+      ]
+    );
   };
 
   const formatRecordForDisplay = (record) => {
@@ -293,26 +429,26 @@ export default function Directory() {
       case 'hotspots':
         return {
           id: record._id,
-          permitNumber: record.complaintNumber,
-          permitHolder: record.subject,
-          commodity: record.typeOfCommodity,
+          permitNumber: record.complaintNumber || 'N/A',
+          permitHolder: record.subject || 'N/A',
+          commodity: record.typeOfCommodity || 'N/A',
           area: 'N/A',
-          barangay: record.barangay,
-          municipality: record.municipality,
-          province: record.province,
-          status: record.actionsTaken,
+          barangay: record.barangay || 'N/A',
+          municipality: record.municipality || 'N/A',
+          province: record.province || 'N/A',
+          status: record.actionsTaken || 'N/A',
           classification: record.natureOfReportedIllegalAct || 'N/A',
           type: record.typeOfCommodity || 'N/A',
-          sitio: record.sitio,
-          longitude: record.longitude,
-          latitude: record.latitude,
-          details: record.details,
-          lawsViolated: record.lawsViolated,
-          numberOfCDOIssued: record.numberOfCDOIssued,
-          remarks: record.remarks,
-          dateApproved: record.dateOfActionTaken,
-          dateExpiry: record.dateIssued,
-          googleMapLink: record.googleMapLink
+          sitio: record.sitio || '',
+          longitude: record.longitude || '',
+          latitude: record.latitude || '',
+          details: record.details || '',
+          lawsViolated: record.lawsViolated || '',
+          numberOfCDOIssued: record.numberOfCDOIssued || 0,
+          remarks: record.remarks || '',
+          dateApproved: record.dateOfActionTaken || '',
+          dateExpiry: record.dateIssued || '',
+          googleMapLink: record.googleMapLink || ''
         };
       default:
         return record;
@@ -320,6 +456,7 @@ export default function Directory() {
   };
 
   const getDisplayData = () => {
+    // Use consistent pagination for both online and offline
     return directoryData.map(formatRecordForDisplay);
   };
 
@@ -475,67 +612,67 @@ export default function Directory() {
               {/* Hotspots Directory specific fields */}
               {selectedCategory?.id === 'hotspots' && (
                 <>
-                  {selectedRecord.sitio && (
+                  {selectedRecord.sitio && selectedRecord.sitio.trim() !== '' && (
                     <View style={styles.detailRow}>
                       <Text style={styles.detailLabel}>SITIO:</Text>
-                      <Text style={styles.detailValue}>{selectedRecord.sitio}</Text>
+                      <Text style={styles.detailValue}>{String(selectedRecord.sitio)}</Text>
                     </View>
                   )}
-                  {selectedRecord.details && (
+                  {selectedRecord.details && selectedRecord.details.trim() !== '' && (
                     <View style={styles.detailRow}>
                       <Text style={styles.detailLabel}>DETAILS:</Text>
-                      <Text style={styles.detailValue}>{selectedRecord.details}</Text>
+                      <Text style={styles.detailValue}>{String(selectedRecord.details)}</Text>
                     </View>
                   )}
-                  {selectedRecord.lawsViolated && (
+                  {selectedRecord.lawsViolated && selectedRecord.lawsViolated.trim() !== '' && (
                     <View style={styles.detailRow}>
                       <Text style={styles.detailLabel}>LAWS VIOLATED:</Text>
-                      <Text style={styles.detailValue}>{selectedRecord.lawsViolated}</Text>
+                      <Text style={styles.detailValue}>{String(selectedRecord.lawsViolated)}</Text>
                     </View>
                   )}
-                  {selectedRecord.numberOfCDOIssued && (
+                  {selectedRecord.numberOfCDOIssued !== undefined && selectedRecord.numberOfCDOIssued !== null && selectedRecord.numberOfCDOIssued !== 0 && (
                     <View style={styles.detailRow}>
                       <Text style={styles.detailLabel}>NO. OF CDO ISSUED:</Text>
-                      <Text style={styles.detailValue}>{selectedRecord.numberOfCDOIssued}</Text>
+                      <Text style={styles.detailValue}>{String(selectedRecord.numberOfCDOIssued)}</Text>
                     </View>
                   )}
-                  {selectedRecord.remarks && (
+                  {selectedRecord.remarks && selectedRecord.remarks.trim() !== '' && (
                     <View style={styles.detailRow}>
                       <Text style={styles.detailLabel}>REMARKS:</Text>
-                      <Text style={styles.detailValue}>{selectedRecord.remarks}</Text>
+                      <Text style={styles.detailValue}>{String(selectedRecord.remarks)}</Text>
                     </View>
                   )}
-                  {selectedRecord.longitude && (
+                  {selectedRecord.longitude && selectedRecord.longitude.toString().trim() !== '' && (
                     <View style={styles.detailRow}>
                       <Text style={styles.detailLabel}>LONGITUDE:</Text>
-                      <Text style={styles.detailValue}>{selectedRecord.longitude}</Text>
+                      <Text style={styles.detailValue}>{String(selectedRecord.longitude)}</Text>
                     </View>
                   )}
-                  {selectedRecord.latitude && (
+                  {selectedRecord.latitude && selectedRecord.latitude.toString().trim() !== '' && (
                     <View style={styles.detailRow}>
                       <Text style={styles.detailLabel}>LATITUDE:</Text>
-                      <Text style={styles.detailValue}>{selectedRecord.latitude}</Text>
+                      <Text style={styles.detailValue}>{String(selectedRecord.latitude)}</Text>
                     </View>
                   )}
-                  {selectedRecord.dateApproved && (
+                  {selectedRecord.dateApproved && selectedRecord.dateApproved.trim() !== '' && (
                     <View style={styles.detailRow}>
                       <Text style={styles.detailLabel}>DATE OF ACTION TAKEN:</Text>
-                      <Text style={styles.detailValue}>{selectedRecord.dateApproved}</Text>
+                      <Text style={styles.detailValue}>{String(selectedRecord.dateApproved)}</Text>
                     </View>
                   )}
-                  {selectedRecord.dateExpiry && (
+                  {selectedRecord.dateExpiry && selectedRecord.dateExpiry.trim() !== '' && (
                     <View style={styles.detailRow}>
                       <Text style={styles.detailLabel}>DATE ISSUED:</Text>
-                      <Text style={styles.detailValue}>{selectedRecord.dateExpiry}</Text>
+                      <Text style={styles.detailValue}>{String(selectedRecord.dateExpiry)}</Text>
                     </View>
                   )}
                 </>
               )}
 
-              {selectedRecord.googleMapLink && (
+              {selectedRecord.googleMapLink && selectedRecord.googleMapLink.trim() !== '' && (
                 <View style={styles.detailRow}>
                   <Text style={styles.detailLabel}>GOOGLE MAP LINK:</Text>
-                  <Text style={styles.detailValue}>{selectedRecord.googleMapLink || 'Not available'}</Text>
+                  <Text style={styles.detailValue}>{String(selectedRecord.googleMapLink) || 'Not available'}</Text>
                 </View>
               )}
             </ScrollView>
@@ -588,23 +725,159 @@ export default function Directory() {
     </Modal>
   );
 
+  const DownloadProgressModal = () => (
+    <Modal 
+      visible={showDownloadModal} 
+      transparent 
+      animationType="fade"
+      statusBarTranslucent={true}
+    >
+      <View style={styles.modalOverlay}>
+        <View style={styles.downloadModalContent}>
+          <View style={styles.downloadModalHeader}>
+            <View style={styles.downloadIconContainer}>
+              <Ionicons name="cloud-download" size={32} color={COLORS.primary} />
+            </View>
+            <Text style={styles.downloadModalTitle}>Downloading Directory Data</Text>
+            <Text style={styles.downloadModalSubtitle}>
+              Downloading all directory data for offline use...
+            </Text>
+          </View>
+          
+          <View style={styles.downloadProgressContainer}>
+            {/* Overall Progress */}
+            <View style={styles.progressSection}>
+              <View style={styles.progressHeader}>
+                <Text style={styles.progressLabel}>Overall Progress</Text>
+                <Text style={styles.progressPercentage}>{Math.round(downloadProgress.overall)}%</Text>
+              </View>
+              <View style={styles.progressBarContainer}>
+                <View style={[styles.progressBar, { width: `${downloadProgress.overall}%` }]} />
+              </View>
+            </View>
+
+            {/* Individual Category Progress */}
+            <View style={styles.categoryProgressContainer}>
+              <Text style={styles.categoriesTitle}>Categories</Text>
+              
+              <View style={styles.categoryProgress}>
+                <View style={styles.categoryHeader}>
+                  <View style={styles.categoryInfo}>
+                    <Ionicons name="business" size={16} color={COLORS.textSecondary} />
+                    <Text style={styles.categoryLabel}>National</Text>
+                  </View>
+                  <Text style={styles.categoryPercentage}>{Math.round(downloadProgress.national)}%</Text>
+                </View>
+                <View style={styles.progressBarContainer}>
+                  <View style={[styles.progressBar, { width: `${downloadProgress.national}%` }]} />
+                </View>
+              </View>
+
+              <View style={styles.categoryProgress}>
+                <View style={styles.categoryHeader}>
+                  <View style={styles.categoryInfo}>
+                    <Ionicons name="location" size={16} color={COLORS.textSecondary} />
+                    <Text style={styles.categoryLabel}>Local</Text>
+                  </View>
+                  <Text style={styles.categoryPercentage}>{Math.round(downloadProgress.local)}%</Text>
+                </View>
+                <View style={styles.progressBarContainer}>
+                  <View style={[styles.progressBar, { width: `${downloadProgress.local}%` }]} />
+                </View>
+              </View>
+
+              <View style={styles.categoryProgress}>
+                <View style={styles.categoryHeader}>
+                  <View style={styles.categoryInfo}>
+                    <Ionicons name="warning" size={16} color={COLORS.textSecondary} />
+                    <Text style={styles.categoryLabel}>Hotspots</Text>
+                  </View>
+                  <Text style={styles.categoryPercentage}>{Math.round(downloadProgress.hotspots)}%</Text>
+                </View>
+                <View style={styles.progressBarContainer}>
+                  <View style={[styles.progressBar, { width: `${downloadProgress.hotspots}%` }]} />
+                </View>
+              </View>
+            </View>
+
+            {/* Loading indicator */}
+            {isDownloading && (
+              <View style={styles.loadingSection}>
+                <ActivityIndicator size="large" color={COLORS.primary} />
+                <Text style={styles.loadingText}>
+                  {downloadProgress.overall >= 100 ? 'Finalizing download...' : 'Please wait while we download the data...'}
+                </Text>
+              </View>
+            )}
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+
   return (
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerContent}>
-          <Text style={styles.headerTitle}>Directory</Text>
-          <TouchableOpacity 
-            style={styles.categoryButton}
-            onPress={() => setShowCategoryModal(true)}
-          >
-            <Ionicons name="grid-outline" size={20} color={COLORS.primary} />
-            <Text style={styles.categoryButtonText}>Categories</Text>
-          </TouchableOpacity>
+          <View style={styles.headerLeft}>
+            <Text style={styles.headerTitle}>Directory</Text>
+            {/* Network Status Indicator */}
+            <View style={[styles.statusIndicator, { backgroundColor: isOnline ? '#4CAF50' : '#FF5722' }]}>
+              <Ionicons 
+                name={isOnline ? "wifi" : "wifi-off"} 
+                size={12} 
+                color="white" 
+              />
+              <Text style={styles.statusText}>{isOnline ? 'Online' : 'Offline'}</Text>
+            </View>
+          </View>
+          
+          <View style={styles.headerButtons}>
+            <TouchableOpacity 
+              style={styles.categoryButton}
+              onPress={() => setShowCategoryModal(true)}
+            >
+              <Ionicons name="grid-outline" size={20} color={COLORS.primary} />
+              <Text style={styles.categoryButtonText}>Categories</Text>
+            </TouchableOpacity>
+            
+            {/* Download Button */}
+            <TouchableOpacity 
+              style={[styles.downloadButton, { opacity: isDownloading ? 0.6 : 1 }]}
+              onPress={handleDownloadData}
+              disabled={isDownloading || !isOnline}
+            >
+              <Ionicons 
+                name={offlineDataStatus.isDownloaded ? "cloud-done" : "cloud-download"} 
+                size={20} 
+                color="white" 
+              />
+              <Text style={styles.downloadButtonText}>
+                {offlineDataStatus.isDownloaded ? 'Downloaded' : 'Download'}
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
-        <Text style={styles.headerSubtitle}>
-          {selectedCategory ? selectedCategory.label : 'Mining permits and applications database'}
-        </Text>
+        
+        <View style={styles.headerSubtitleContainer}>
+          <Text style={styles.headerSubtitle}>
+            {selectedCategory ? selectedCategory.label : 'Mining permits and applications database'}
+          </Text>
+          
+          {/* Offline Data Status */}
+          {offlineDataStatus.isDownloaded && (
+            <View style={styles.offlineStatus}>
+              <Ionicons name="download" size={14} color={COLORS.textSecondary} />
+              <Text style={styles.offlineStatusText}>
+                {offlineDataStatus.storageInfo.total} records available offline
+              </Text>
+              <TouchableOpacity onPress={handleClearOfflineData}>
+                <Text style={styles.clearDataText}>Clear</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
       </View>
 
       {/* Search and Filters */}
@@ -753,9 +1026,16 @@ export default function Directory() {
 
       {/* Results Count */}
       <View style={styles.resultsContainer}>
-        <Text style={styles.resultsText}>
-          {pagination.totalRecords} records found
-        </Text>
+        <View style={styles.resultsLeft}>
+          <Text style={styles.resultsText}>
+            {pagination.totalRecords} records found
+          </Text>
+          {!isOnline && offlineDataStatus.isDownloaded && (
+            <Text style={styles.offlineIndicator}>
+              • Showing offline data
+            </Text>
+          )}
+        </View>
         {(searchQuery || selectedProvince !== 'all' || selectedStatus !== 'all' || selectedClassification !== 'all' || selectedType !== 'all') && (
           <TouchableOpacity
             style={styles.clearButton}
@@ -784,15 +1064,6 @@ export default function Directory() {
             refreshControl={
               <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
             }
-            onScroll={({ nativeEvent }) => {
-              const { layoutMeasurement, contentOffset, contentSize } = nativeEvent;
-              const paddingToBottom = 50;
-              const isCloseToBottom = layoutMeasurement.height + contentOffset.y >= contentSize.height - paddingToBottom;
-              
-              if (isCloseToBottom && !loadingMore && pagination.hasNext) {
-                loadMoreData();
-              }
-            }}
             scrollEventThrottle={400}
           >
             <DataTable
@@ -800,22 +1071,33 @@ export default function Directory() {
               onRowPress={handleRowPress}
               category={selectedCategory?.id}
             />
+            
+            {/* Loading indicator */}
             {loadingMore && (
               <View style={styles.loadMoreContainer}>
                 <ActivityIndicator size="small" color={COLORS.primary} />
-                <Text style={styles.loadMoreText}>Loading more...</Text>
+                <Text style={styles.loadMoreText}>Loading more records...</Text>
               </View>
             )}
-            {pagination.totalRecords > 0 && !pagination.hasNext && pagination.currentPage >= pagination.totalPages && (
-              <View style={styles.endContainer}>
-                <Text style={styles.endText}>End of results ({pagination.totalRecords} total)</Text>
-              </View>
-            )}
-            {pagination.totalRecords > 20 && pagination.hasNext && (
-              <TouchableOpacity style={styles.loadMoreButton} onPress={loadMoreData}>
-                <Text style={styles.loadMoreButtonText}>Load More Records</Text>
+            
+            {/* Load More Button or End Message */}
+            {pagination.hasNext ? (
+              <TouchableOpacity 
+                style={styles.loadMoreButton} 
+                onPress={loadMoreData}
+                disabled={loadingMore}
+              >
+                <Text style={styles.loadMoreButtonText}>
+                  Load More Records ({directoryData.length} of {pagination.totalRecords})
+                </Text>
               </TouchableOpacity>
-            )}
+            ) : pagination.totalRecords > 0 ? (
+              <View style={styles.endContainer}>
+                <Text style={styles.endText}>
+                  All {pagination.totalRecords} records loaded
+                </Text>
+              </View>
+            ) : null}
           </ScrollView>
         ) : (
           <ScrollView
@@ -838,6 +1120,7 @@ export default function Directory() {
       {/* Modals */}
       <CategoryModal />
       <DetailModal />
+      <DownloadProgressModal />
     </View>
   );
 }
@@ -862,7 +1145,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   headerTitle: {
-    fontSize: 24,
+    fontSize: 20,
     fontWeight: 'bold',
     color: COLORS.textPrimary,
   },
@@ -896,9 +1179,18 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
   },
+  resultsLeft: {
+    flex: 1,
+  },
   resultsText: {
     fontSize: 14,
     color: COLORS.textSecondary,
+  },
+  offlineIndicator: {
+    fontSize: 12,
+    color: '#FF9800',
+    fontWeight: '500',
+    marginTop: 2,
   },
   clearButton: {
     paddingHorizontal: 12,
@@ -1153,5 +1445,189 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: COLORS.primary,
     fontWeight: '500',
+  },
+  
+  // Offline functionality styles
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  headerButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  statusIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    marginLeft: 12,
+  },
+  statusText: {
+    color: 'white',
+    fontSize: 10,
+    fontWeight: '600',
+    marginLeft: 4,
+  },
+  downloadButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+  },
+  downloadButtonText: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: '600',
+    marginLeft: 4,
+  },
+  headerSubtitleContainer: {
+    marginTop: 8,
+  },
+  offlineStatus: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    backgroundColor: COLORS.background,
+    borderRadius: 6,
+  },
+  offlineStatusText: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    marginLeft: 4,
+    flex: 1,
+  },
+  clearDataText: {
+    fontSize: 12,
+    color: COLORS.primary,
+    fontWeight: '600',
+  },
+  
+  // Download Progress Modal styles
+  downloadModalContent: {
+    backgroundColor: COLORS.white,
+    margin: 20,
+    borderRadius: 16,
+    padding: 24,
+    maxHeight: '80%',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  downloadModalHeader: {
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  downloadIconContainer: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: `${COLORS.primary}15`,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  downloadModalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: COLORS.textPrimary,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  downloadModalSubtitle: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  downloadProgressContainer: {
+    gap: 24,
+  },
+  progressSection: {
+    marginBottom: 8,
+  },
+  progressHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  progressLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: COLORS.textPrimary,
+  },
+  progressPercentage: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: COLORS.primary,
+  },
+  progressBarContainer: {
+    width: '100%',
+    height: 8,
+    backgroundColor: COLORS.background,
+    borderRadius: 4,
+    overflow: 'hidden',
+  },
+  progressBar: {
+    height: '100%',
+    backgroundColor: COLORS.primary,
+    borderRadius: 4,
+  },
+  categoriesTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.textPrimary,
+    marginBottom: 16,
+  },
+  categoryProgressContainer: {
+    gap: 16,
+  },
+  categoryProgress: {
+    gap: 8,
+  },
+  categoryHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  categoryInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  categoryLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: COLORS.textPrimary,
+  },
+  categoryPercentage: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.primary,
+  },
+  loadingSection: {
+    alignItems: 'center',
+    paddingTop: 16,
+    paddingBottom: 8,
+  },
+  loadingText: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+    marginTop: 12,
+    textAlign: 'center',
+    lineHeight: 20,
   },
 });

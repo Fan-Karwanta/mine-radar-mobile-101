@@ -84,7 +84,7 @@ export default function Profile() {
         </View>
       </View>
 
-      {/* Activity Stats */}
+      {/* Activity Stats 
       <View style={styles.statsContainer}>
         <Text style={styles.sectionTitle}>Activity Overview</Text>
         <View style={styles.statsGrid}>
@@ -113,7 +113,7 @@ export default function Profile() {
             color="#FF9800"
           />
         </View>
-      </View>
+      </View> */}
 
       {/* Account Settings */}
       <View style={styles.section}>

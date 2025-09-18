@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -7,247 +7,182 @@ import {
   Modal,
   ScrollView,
   Alert,
+  ActivityIndicator,
+  Dimensions,
+  Linking,
 } from 'react-native';
+import { WebView } from 'react-native-webview';
+import * as Location from 'expo-location';
 import { Ionicons } from '@expo/vector-icons';
 import COLORS from '../../constants/colors';
 
-// Mock mining site coordinates
-const miningSites = [
-  {
-    id: 'QP-REG-004-C',
-    permitHolder: 'Northern Essentials',
-    commodity: 'Basalt',
-    area: '4.9541',
-    location: 'San Jose, Rodriguez, Rizal',
-    coordinates: { latitude: 14.7203, longitude: 121.1327 },
-    status: 'Active',
-  },
-  {
-    id: 'QP-REG-006',
-    permitHolder: 'Blue River Minerals',
-    commodity: 'Basalt',
-    area: '5.0000',
-    location: 'San Jose, Rodriguez, Rizal',
-    coordinates: { latitude: 14.7150, longitude: 121.1280 },
-    status: 'Active',
-  },
-  {
-    id: 'QP No. 002-C-2021',
-    permitHolder: 'JB Construction Corporation',
-    commodity: 'Quarry Materials',
-    area: '4.3393',
-    location: 'Brgy. Pinagbayanan II, Masinloc, Cavite',
-    coordinates: { latitude: 14.3320, longitude: 120.7350 },
-    status: 'Commercial Operation',
-  },
-  {
-    id: 'QP No. 002-C-2022',
-    permitHolder: 'ACG Quarrying Services',
-    commodity: 'Filling Materials',
-    area: '5',
-    location: 'Brgy. Sapang I, Ternate, Cavite',
-    coordinates: { latitude: 14.2890, longitude: 120.7120 },
-    status: 'Commercial Operation',
-  },
-];
 
-export default function Maps() {
-  const [selectedSite, setSelectedSite] = useState(null);
-  const [showDetailModal, setShowDetailModal] = useState(false);
+function Maps() {
+  const mapRef = useRef(null);
+  const [locationPermission, setLocationPermission] = useState(null);
+  const [isLoadingLocation, setIsLoadingLocation] = useState(false);
 
-  const handleSitePress = (site) => {
-    setSelectedSite(site);
-    setShowDetailModal(true);
-  };
-
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'Active':
-        return COLORS.primary;
-      case 'Commercial Operation':
-        return '#2196F3';
-      case 'Under Investigation':
-        return '#FF9800';
-      default:
-        return COLORS.textSecondary;
+  const requestLocationPermission = async () => {
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      setLocationPermission(status === 'granted');
+      
+      if (status === 'granted') {
+        getCurrentLocation();
+      } else {
+        Alert.alert(
+          'Location Permission',
+          'Location access is required to show your current position on the map.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Settings', onPress: () => Location.requestForegroundPermissionsAsync() }
+          ]
+        );
+      }
+    } catch (error) {
+      console.error('Error requesting location permission:', error);
+      Alert.alert('Error', 'Failed to request location permission');
     }
   };
 
-  const SiteDetailModal = () => (
-    <Modal visible={showDetailModal} transparent animationType="slide">
-      <View style={styles.modalOverlay}>
-        <View style={styles.detailModalContent}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Mining Site Details</Text>
-            <TouchableOpacity onPress={() => setShowDetailModal(false)}>
-              <Ionicons name="close" size={24} color={COLORS.textPrimary} />
-            </TouchableOpacity>
-          </View>
-          
-          {selectedSite && (
-            <ScrollView style={styles.detailContent}>
-              <View style={styles.detailSection}>
-                <Text style={styles.detailSectionTitle}>Site Information</Text>
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Permit No:</Text>
-                  <Text style={styles.detailValue}>{selectedSite.id}</Text>
-                </View>
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Permit Holder:</Text>
-                  <Text style={styles.detailValue}>{selectedSite.permitHolder}</Text>
-                </View>
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Commodity:</Text>
-                  <Text style={styles.detailValue}>{selectedSite.commodity}</Text>
-                </View>
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Area:</Text>
-                  <Text style={styles.detailValue}>{selectedSite.area} hectares</Text>
-                </View>
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Location:</Text>
-                  <Text style={styles.detailValue}>{selectedSite.location}</Text>
-                </View>
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Coordinates:</Text>
-                  <Text style={styles.detailValue}>
-                    {selectedSite.coordinates.latitude.toFixed(4)}, {selectedSite.coordinates.longitude.toFixed(4)}
-                  </Text>
-                </View>
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Status:</Text>
-                  <View style={[styles.statusBadge, { backgroundColor: getStatusColor(selectedSite.status) }]}>
-                    <Text style={styles.statusText}>{selectedSite.status}</Text>
-                  </View>
-                </View>
-              </View>
-
-              <TouchableOpacity
-                style={styles.directionsButton}
-                onPress={() => Alert.alert('Directions', 'Opening directions in maps app (Coming Soon)')}
-              >
-                <Ionicons name="navigate-outline" size={20} color={COLORS.white} />
-                <Text style={styles.directionsText}>Get Directions</Text>
-              </TouchableOpacity>
-            </ScrollView>
-          )}
-        </View>
-      </View>
-    </Modal>
-  );
-
-  const SiteCard = ({ site }) => (
-    <TouchableOpacity
-      style={styles.siteCard}
-      onPress={() => handleSitePress(site)}
-    >
-      <View style={styles.cardHeader}>
-        <View style={styles.cardTitleContainer}>
-          <Text style={styles.cardTitle}>{site.permitHolder}</Text>
-          <View style={[styles.statusBadge, { backgroundColor: getStatusColor(site.status) }]}>
-            <Text style={styles.statusText}>{site.status}</Text>
-          </View>
-        </View>
-        <Ionicons name="location" size={20} color={COLORS.primary} />
-      </View>
+  const getCurrentLocation = async () => {
+    try {
+      setIsLoadingLocation(true);
+      const location = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.High,
+      });
       
-      <View style={styles.cardInfo}>
-        <View style={styles.infoRow}>
-          <Ionicons name="document-text-outline" size={16} color={COLORS.textSecondary} />
-          <Text style={styles.infoText}>{site.id}</Text>
-        </View>
-        <View style={styles.infoRow}>
-          <Ionicons name="cube-outline" size={16} color={COLORS.textSecondary} />
-          <Text style={styles.infoText}>{site.commodity}</Text>
-        </View>
-        <View style={styles.infoRow}>
-          <Ionicons name="location-outline" size={16} color={COLORS.textSecondary} />
-          <Text style={styles.infoText}>{site.location}</Text>
-        </View>
-        <View style={styles.infoRow}>
-          <Ionicons name="resize-outline" size={16} color={COLORS.textSecondary} />
-          <Text style={styles.infoText}>{site.area} hectares</Text>
-        </View>
-      </View>
-    </TouchableOpacity>
-  );
+      const { latitude, longitude } = location.coords;
+      
+      // Get reverse geocoding for complete address
+      const reverseGeocode = await Location.reverseGeocodeAsync({
+        latitude,
+        longitude,
+      });
+      
+      let addressText = `Latitude: ${latitude.toFixed(6)}\nLongitude: ${longitude.toFixed(6)}`;
+      
+      if (reverseGeocode && reverseGeocode.length > 0) {
+        const address = reverseGeocode[0];
+        addressText += '\n\nAddress:';
+        
+        if (address.streetNumber && address.street) {
+          addressText += `\n${address.streetNumber} ${address.street}`;
+        } else if (address.street) {
+          addressText += `\n${address.street}`;
+        }
+        
+        if (address.district) {
+          addressText += `\nBarangay ${address.district}`;
+        }
+        
+        if (address.city) {
+          addressText += `\n${address.city}`;
+        }
+        
+        if (address.region) {
+          addressText += `\n${address.region}`;
+        }
+        
+        if (address.country) {
+          addressText += `\n${address.country}`;
+        }
+      }
+      
+      Alert.alert('Current Location', addressText, [{ text: 'OK' }]);
+    } catch (error) {
+      console.error('Error getting current location:', error);
+      Alert.alert('Location Error', 'Failed to get your current location');
+    } finally {
+      setIsLoadingLocation(false);
+    }
+  };
+
+  const openInGoogleMaps = async () => {
+    const googleMapsUrl = 'https://www.google.com/maps/d/u/0/edit?mid=1Zy8ktwgWar8ASol8izAae5ctRXYifs0&usp=sharing';
+    
+    try {
+      const supported = await Linking.canOpenURL(googleMapsUrl);
+      
+      if (supported) {
+        await Linking.openURL(googleMapsUrl);
+      } else {
+        Alert.alert(
+          'Unable to Open',
+          'Cannot open Google Maps. Please make sure you have Google Maps installed on your device.',
+          [{ text: 'OK' }]
+        );
+      }
+    } catch (error) {
+      console.error('Error opening Google Maps:', error);
+      Alert.alert('Error', 'Failed to open Google Maps');
+    }
+  };
+
+
+
+
+
+
 
   return (
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Maps</Text>
-        <Text style={styles.headerSubtitle}>Mining sites and locations</Text>
+        <Text style={styles.headerTitle}>MPSA Sample Map</Text>
       </View>
 
-      {/* Map Placeholder */}
+
+      {/* Google Maps WebView */}
       <View style={styles.mapContainer}>
-        <View style={styles.mapPlaceholder}>
-          <Ionicons name="map-outline" size={80} color={COLORS.textSecondary} />
-          <Text style={styles.mapPlaceholderTitle}>Interactive Map</Text>
-          <Text style={styles.mapPlaceholderSubtitle}>
-            Google Maps integration coming soon
-          </Text>
-          <Text style={styles.mapPlaceholderDescription}>
-            Will display mining sites with interactive markers
-          </Text>
-        </View>
+        <WebView
+          ref={mapRef}
+          style={styles.map}
+          source={{ uri: 'https://www.google.com/maps/d/embed?mid=1Zy8ktwgWar8ASol8izAae5ctRXYifs0' }}
+          javaScriptEnabled={true}
+          domStorageEnabled={true}
+          startInLoadingState={true}
+          renderLoading={() => (
+            <View style={styles.loadingOverlay}>
+              <ActivityIndicator size="large" color={COLORS.primary} />
+              <Text style={styles.loadingText}>Loading map...</Text>
+            </View>
+          )}
+        />
+        
+        {/* Loading Indicator */}
+        {isLoadingLocation && (
+          <View style={styles.loadingOverlay}>
+            <ActivityIndicator size="large" color={COLORS.primary} />
+            <Text style={styles.loadingText}>Getting your location...</Text>
+          </View>
+        )}
         
         {/* Map Controls */}
         <View style={styles.mapControls}>
-          <TouchableOpacity style={styles.controlButton}>
-            <Ionicons name="layers-outline" size={20} color={COLORS.primary} />
+          <TouchableOpacity
+            style={styles.controlButton}
+            onPress={openInGoogleMaps}
+          >
+            <Ionicons name="navigate" size={24} color={COLORS.white} />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.controlButton}>
-            <Ionicons name="locate-outline" size={20} color={COLORS.primary} />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.controlButton}>
-            <Ionicons name="filter-outline" size={20} color={COLORS.primary} />
+          
+          <TouchableOpacity
+            style={styles.controlButton}
+            onPress={requestLocationPermission}
+            disabled={isLoadingLocation}
+          >
+            {isLoadingLocation ? (
+              <ActivityIndicator size="small" color={COLORS.white} />
+            ) : (
+              <Ionicons name="locate" size={24} color={COLORS.white} />
+            )}
           </TouchableOpacity>
         </View>
       </View>
 
-      {/* Sites List */}
-      <View style={styles.sitesContainer}>
-        <View style={styles.sitesHeader}>
-          <Text style={styles.sitesTitle}>Mining Sites ({miningSites.length})</Text>
-          <TouchableOpacity style={styles.listViewButton}>
-            <Ionicons name="list-outline" size={20} color={COLORS.primary} />
-            <Text style={styles.listViewText}>List View</Text>
-          </TouchableOpacity>
-        </View>
-        
-        <ScrollView 
-          style={styles.sitesList}
-          showsVerticalScrollIndicator={false}
-        >
-          {miningSites.map((site) => (
-            <SiteCard key={site.id} site={site} />
-          ))}
-        </ScrollView>
-      </View>
 
-      {/* Legend */}
-      <View style={styles.legend}>
-        <Text style={styles.legendTitle}>Legend</Text>
-        <View style={styles.legendItems}>
-          <View style={styles.legendItem}>
-            <View style={[styles.legendDot, { backgroundColor: COLORS.primary }]} />
-            <Text style={styles.legendText}>Active</Text>
-          </View>
-          <View style={styles.legendItem}>
-            <View style={[styles.legendDot, { backgroundColor: '#2196F3' }]} />
-            <Text style={styles.legendText}>Commercial</Text>
-          </View>
-          <View style={styles.legendItem}>
-            <View style={[styles.legendDot, { backgroundColor: '#FF9800' }]} />
-            <Text style={styles.legendText}>Under Review</Text>
-          </View>
-        </View>
-      </View>
 
-      {/* Site Detail Modal */}
-      <SiteDetailModal />
     </View>
   );
 }
@@ -275,40 +210,97 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: COLORS.textSecondary,
   },
+  paginationContainer: {
+    flexDirection: 'row',
+    marginHorizontal: 16,
+    marginTop: 12,
+    marginBottom: 8,
+    backgroundColor: COLORS.cardBackground,
+    borderRadius: 8,
+    padding: 4,
+  },
+  pageButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+    gap: 6,
+  },
+  activePageButton: {
+    backgroundColor: COLORS.primary,
+  },
+  pageButtonText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: COLORS.primary,
+  },
+  activePageButtonText: {
+    color: COLORS.white,
+  },
   mapContainer: {
-    height: 250,
+    flex: 1,
     margin: 16,
     borderRadius: 12,
     overflow: 'hidden',
     position: 'relative',
   },
-  mapPlaceholder: {
+  map: {
     flex: 1,
-    backgroundColor: COLORS.cardBackground,
+  },
+  customMarker: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 2,
-    borderColor: COLORS.border,
-    borderStyle: 'dashed',
+    borderColor: COLORS.white,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 5,
   },
-  mapPlaceholderTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: COLORS.textPrimary,
+  currentLocationMarker: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: COLORS.white,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: COLORS.primary,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  currentLocationDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: COLORS.primary,
+  },
+  loadingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(255, 255, 255, 0.8)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1000,
+  },
+  loadingText: {
     marginTop: 12,
-  },
-  mapPlaceholderSubtitle: {
     fontSize: 14,
-    color: COLORS.primary,
+    color: COLORS.textPrimary,
     fontWeight: '600',
-    marginTop: 4,
-  },
-  mapPlaceholderDescription: {
-    fontSize: 12,
-    color: COLORS.textSecondary,
-    marginTop: 8,
-    textAlign: 'center',
-    paddingHorizontal: 20,
   },
   mapControls: {
     position: 'absolute',
@@ -317,17 +309,22 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   controlButton: {
-    width: 40,
-    height: 40,
-    backgroundColor: COLORS.white,
-    borderRadius: 20,
+    width: 50,
+    height: 50,
+    backgroundColor: COLORS.primary,
+    borderRadius: 25,
     justifyContent: 'center',
     alignItems: 'center',
-    elevation: 2,
+    elevation: 4,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    borderWidth: 2,
+    borderColor: COLORS.white,
+  },
+  controlButtonDisabled: {
+    opacity: 0.5,
   },
   sitesContainer: {
     flex: 1,
@@ -507,3 +504,5 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 });
+
+export default Maps;

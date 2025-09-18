@@ -159,51 +159,59 @@ export default function Contact() {
         </View>
       </InfoCard>
 
-      {/* Feedback Form */}
-      <InfoCard title="Send Feedback">
-        <View style={styles.feedbackForm}>
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Name *</Text>
-            <TextInput
-              style={styles.textInput}
-              placeholder="Enter your full name"
-              value={feedbackForm.name}
-              onChangeText={(text) => setFeedbackForm({...feedbackForm, name: text})}
-            />
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Email *</Text>
-            <TextInput
-              style={styles.textInput}
-              placeholder="Enter your email address"
-              value={feedbackForm.email}
-              onChangeText={(text) => setFeedbackForm({...feedbackForm, email: text})}
-              keyboardType="email-address"
-              autoCapitalize="none"
-            />
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Message *</Text>
-            <TextInput
-              style={[styles.textInput, styles.textArea]}
-              placeholder="Enter your message or feedback..."
-              value={feedbackForm.message}
-              onChangeText={(text) => setFeedbackForm({...feedbackForm, message: text})}
-              multiline
-              numberOfLines={4}
-            />
-          </View>
-
-          <TouchableOpacity
-            style={styles.submitButton}
-            onPress={handleSubmitFeedback}
-          >
-            <Ionicons name="send-outline" size={20} color={COLORS.white} />
-            <Text style={styles.submitButtonText}>Send Feedback</Text>
-          </TouchableOpacity>
-        </View>
+      {/* Contact Directory */}
+      <InfoCard title="Contact Directory">
+        <Text style={styles.contactDirectoryDescription}>
+          Contact information for MGB offices and PMRB regional branches. Send messages directly to admin panel or email.
+        </Text>
+        
+        <ContactCard
+          icon="business-outline"
+          title="MGB IV CALABARZON"
+          subtitle="region4a@mgb.gov.ph"
+          onPress={() => handleEmail('region4a@mgb.gov.ph')}
+          actionIcon="mail"
+        />
+        
+        <ContactCard
+          icon="location-outline"
+          title="PMRB Rizal"
+          subtitle="pmrb.rizal95@gmail.com"
+          onPress={() => handleEmail('pmrb.rizal95@gmail.com')}
+          actionIcon="mail"
+        />
+        
+        <ContactCard
+          icon="location-outline"
+          title="PMRB Cavite"
+          subtitle="pmrbcavite@gmail.com"
+          onPress={() => handleEmail('pmrbcavite@gmail.com')}
+          actionIcon="mail"
+        />
+        
+        <ContactCard
+          icon="location-outline"
+          title="PMRB Laguna"
+          subtitle="pmrblaguna@gmail.com"
+          onPress={() => handleEmail('pmrblaguna@gmail.com')}
+          actionIcon="mail"
+        />
+        
+        <ContactCard
+          icon="location-outline"
+          title="PMRB Quezon"
+          subtitle="quezon.pmrb@gmail.com"
+          onPress={() => handleEmail('quezon.pmrb@gmail.com')}
+          actionIcon="mail"
+        />
+        
+        <ContactCard
+          icon="location-outline"
+          title="PMRB Batangas"
+          subtitle="miningsection_pgenro@yahoo.com"
+          onPress={() => handleEmail('miningsection_pgenro@yahoo.com')}
+          actionIcon="mail"
+        />
       </InfoCard>
 
       {/* Emergency Contact */}
@@ -432,5 +440,11 @@ const styles = StyleSheet.create({
   },
   bottomSpacing: {
     height: 20,
+  },
+  contactDirectoryDescription: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+    lineHeight: 20,
+    marginBottom: 16,
   },
 });

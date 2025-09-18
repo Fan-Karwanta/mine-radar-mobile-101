@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
@@ -11,10 +11,15 @@ import {
   Alert,
   Switch,
   Picker,
+  RefreshControl,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import COLORS from '../../constants/colors';
 import { useAuthStore } from '../../store/authStore';
+import reportService from '../../services/reportService';
+import locationService from '../../services/locationService';
+import imageService from '../../services/imageService';
 
 // Translation object for Illegal Mining
 const illegalMiningTranslations = {
@@ -630,13 +635,49 @@ const mockReports = [
 
 export default function Reports() {
   const { user } = useAuthStore();
-  const [reports, setReports] = useState(mockReports);
+  
+  // Main state
+  const [activeTab, setActiveTab] = useState('reports'); // 'reports' or 'drafts'
+  const [reports, setReports] = useState([]);
+  const [drafts, setDrafts] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [selectedReport, setSelectedReport] = useState(null);
+  const [showReportDetail, setShowReportDetail] = useState(false);
+  const [selectedDraft, setSelectedDraft] = useState(null);
+  const [showDraftDetail, setShowDraftDetail] = useState(false);
+  
+  // Form and modal state
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [showChecklistModal, setShowChecklistModal] = useState(false);
-  const [showMyReports, setShowMyReports] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [language, setLanguage] = useState('english');
-  const [expandedCard, setExpandedCard] = useState(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSavingDraft, setIsSavingDraft] = useState(false);
+  const [isLoadingLocation, setIsLoadingLocation] = useState(false);
+  const [isLoadingTransportationLocation, setIsLoadingTransportationLocation] = useState(false);
+  const [isLoadingProcessingLocation, setIsLoadingProcessingLocation] = useState(false);
+  const [isLoadingTradingLocation, setIsLoadingTradingLocation] = useState(false);
+  const [isLoadingExplorationLocation, setIsLoadingExplorationLocation] = useState(false);
+  const [isLoadingSmallScaleMiningLocation, setIsLoadingSmallScaleMiningLocation] = useState(false);
+  const [uploadedImages, setUploadedImages] = useState([]);
+  const [isUploadingImages, setIsUploadingImages] = useState(false);
+  
+  // Image preview and management state
+  const [showImagePreview, setShowImagePreview] = useState(false);
+  const [selectedImageIndex, setSelectedImageIndex] = useState(0);
+  const [currentImages, setCurrentImages] = useState([]);
+  const [isEditingImages, setIsEditingImages] = useState(false);
+  const [isUploadingNewImages, setIsUploadingNewImages] = useState(false);
+  
+  // Draft editing state
+  const [editingDraft, setEditingDraft] = useState(null);
+  const [isEditingMode, setIsEditingMode] = useState(false);
+  
+  // Filter and search state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterStatus, setFilterStatus] = useState('all');
+  const [filterType, setFilterType] = useState('all');
   
   // Form state for Illegal Mining checklist
   const [formData, setFormData] = useState({
@@ -648,7 +689,7 @@ export default function Reports() {
     hasSignboard: null, // null, true, false
     projectName: '',
     commodity: '',
-    siteStatus: 'Operating',
+    siteStatus: 'operating',
     activities: {
       extraction: false,
       disposition: false,
@@ -712,7 +753,7 @@ export default function Reports() {
     time: '',
     hasSignboard: null, // null, true, false
     projectName: '',
-    siteStatus: 'Operating', // 'Operating', 'Non-operating', 'Under construction'
+    siteStatus: 'operating', // 'operating', 'non_operating', 'under_construction'
     facilityType: '',
     processingProducts: '',
     operatorName: '',
@@ -941,6 +982,751 @@ export default function Reports() {
   // Check if user has reporting permissions (not public user)
   const canReport = user?.role !== 'public';
 
+  // Data fetching functions
+  const fetchReports = async () => {
+    try {
+      setIsLoading(true);
+      
+      // Fetch reports and drafts separately
+      const [reportsResult, draftsResult] = await Promise.all([
+        reportService.getUserReports(user?.id || user?.username, 1, 50),
+        reportService.getUserDrafts(user?.id || user?.username, 1, 50)
+      ]);
+      
+      if (reportsResult.success) {
+        setReports(reportsResult.data || []);
+      }
+      
+      if (draftsResult.success) {
+        setDrafts(draftsResult.data || []);
+      }
+    } catch (error) {
+      console.error('Error fetching reports:', error);
+      Alert.alert('Error', 'Failed to load reports. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const refreshReports = async () => {
+    try {
+      setIsRefreshing(true);
+      await fetchReports();
+    } catch (error) {
+      console.error('Error refreshing reports:', error);
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
+  // Load reports on component mount
+  useEffect(() => {
+    if (user?.id || user?.username) {
+      fetchReports();
+    }
+  }, [user]);
+
+  // Filter and search functions
+  const getFilteredData = () => {
+    const currentData = activeTab === 'reports' ? reports : drafts;
+    
+    return currentData.filter(item => {
+      const matchesSearch = !searchQuery || 
+        item.location?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        item.reportId?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        item.reportType?.toLowerCase().includes(searchQuery.toLowerCase());
+      
+      const matchesStatus = filterStatus === 'all' || item.status === filterStatus;
+      const matchesType = filterType === 'all' || item.reportType === filterType;
+      
+      return matchesSearch && matchesStatus && matchesType;
+    });
+  };
+
+  const getStatusColor = (status) => {
+    switch (status?.toLowerCase()) {
+      case 'pending':
+        return '#FF9800';
+      case 'under_investigation':
+        return '#2196F3';
+      case 'resolved':
+        return '#4CAF50';
+      case 'dismissed':
+        return '#F44336';
+      case 'draft':
+        return '#9E9E9E';
+      default:
+        return COLORS.textSecondary;
+    }
+  };
+
+  const getStatusText = (status) => {
+    switch (status?.toLowerCase()) {
+      case 'pending':
+        return 'Pending';
+      case 'under_investigation':
+        return 'Under Investigation';
+      case 'resolved':
+        return 'Resolved';
+      case 'dismissed':
+        return 'Dismissed';
+      case 'draft':
+        return 'Draft';
+      default:
+        return status || 'Unknown';
+    }
+  };
+
+  const getReportTypeTitle = (reportType) => {
+    const category = violationCategories.find(cat => cat.id === reportType);
+    return category ? (language === 'english' ? category.english : category.filipino) : reportType;
+  };
+
+  const formatDate = (dateString) => {
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric'
+      });
+    } catch (error) {
+      return dateString;
+    }
+  };
+
+  // Draft handling functions
+  const handleSaveAsDraft = async () => {
+    if (isSavingDraft) return;
+
+    // Get current form data based on selected category
+    let currentFormData;
+    switch (selectedCategory?.id) {
+      case 'illegal_mining':
+        currentFormData = formData;
+        break;
+      case 'illegal_transport':
+        currentFormData = transportFormData;
+        break;
+      case 'illegal_processing':
+        currentFormData = processingFormData;
+        break;
+      case 'illegal_trading':
+        currentFormData = tradingFormData;
+        break;
+      case 'illegal_exploration':
+        currentFormData = explorationFormData;
+        break;
+      case 'illegal_smallscale':
+        currentFormData = smallScaleMiningFormData;
+        break;
+      default:
+        currentFormData = formData;
+    }
+
+    setIsSavingDraft(true);
+
+    try {
+      const draftData = {
+        type: selectedCategory.id,
+        reporterId: user?.id || user?.username,
+        language: language,
+        ...currentFormData,
+        attachments: uploadedImages.map(img => ({
+          url: img.url,
+          publicId: img.publicId,
+          type: 'image',
+          geotagged: img.geotagged || false,
+          uploadedAt: img.uploadedAt
+        }))
+      };
+
+      let result;
+      if (isEditingMode && editingDraft) {
+        result = await reportService.updateDraft(editingDraft._id, draftData);
+      } else {
+        result = await reportService.saveDraft(draftData);
+      }
+      
+      if (result.success) {
+        Alert.alert('Success', 
+          isEditingMode ? 'Draft updated successfully!' : 'Report saved as draft!', [
+          { 
+            text: 'OK', 
+            onPress: () => {
+              resetAllForms();
+              setUploadedImages([]);
+              setShowChecklistModal(false);
+              setSelectedCategory(null);
+              setEditingDraft(null);
+              setIsEditingMode(false);
+              refreshReports(); // Refresh the reports list
+            }
+          }
+        ]);
+      } else {
+        Alert.alert('Error', result.message || 'Failed to save draft');
+      }
+    } catch (error) {
+      console.error('Error saving draft:', error);
+      Alert.alert('Error', 'An error occurred while saving the draft');
+    } finally {
+      setIsSavingDraft(false);
+    }
+  };
+
+  const handleEditDraft = (draft) => {
+    setEditingDraft(draft);
+    setIsEditingMode(true);
+    
+    // Find the category for this draft
+    const category = violationCategories.find(cat => cat.id === draft.reportType);
+    if (category) {
+      setSelectedCategory(category);
+      
+      // Populate form data based on draft type
+      populateFormFromDraft(draft);
+      
+      // Show the checklist modal
+      setShowChecklistModal(true);
+    }
+  };
+
+  const populateFormFromDraft = (draft) => {
+    console.log('Populating form from draft:', draft);
+    console.log('Draft report type:', draft.reportType);
+    
+    const baseData = {
+      latitude: draft.gpsLocation?.latitude?.toString() || '',
+      longitude: draft.gpsLocation?.longitude?.toString() || '',
+      location: draft.location || '',
+      date: draft.incidentDate || '',
+      time: draft.incidentTime || '',
+      hasSignboard: draft.projectInfo?.hasSignboard === 'yes' ? true : 
+                   draft.projectInfo?.hasSignboard === 'no' ? false : null,
+      projectName: draft.projectInfo?.projectName || '',
+      commodity: draft.commodity || '',
+      siteStatus: draft.siteStatus || 'operating',
+      operatorName: draft.operatorInfo?.name || '',
+      operatorAddress: draft.operatorInfo?.address || '',
+      operatorDetermination: draft.operatorInfo?.determinationMethod || '',
+      additionalInfo: draft.additionalInfo || ''
+    };
+
+    // Set form data based on report type
+    switch (draft.reportType) {
+      case 'illegal_mining':
+        setFormData({
+          ...baseData,
+          activities: {
+            extraction: draft.miningData?.operatingActivities?.extraction?.active || false,
+            disposition: draft.miningData?.operatingActivities?.disposition?.active || false,
+            processing: draft.miningData?.operatingActivities?.processing?.active || false
+          },
+          extractionEquipment: draft.miningData?.operatingActivities?.extraction?.equipment || [],
+          dispositionEquipment: draft.miningData?.operatingActivities?.disposition?.equipment || [],
+          processingEquipment: draft.miningData?.operatingActivities?.processing?.equipment || [],
+          nonOperatingObservations: {
+            excavations: draft.miningData?.nonOperatingObservations?.excavations || false,
+            accessRoad: draft.miningData?.nonOperatingObservations?.accessRoad || false,
+            processingFacility: draft.miningData?.nonOperatingObservations?.processingFacility || false
+          },
+          conductedInterview: draft.miningData?.interview?.conducted || null,
+          guideQuestions: draft.miningData?.interview?.responses || {
+            recentActivity: '',
+            excavationStart: '',
+            transportVehicles: '',
+            operatorName: '',
+            operatorAddress: '',
+            permits: ''
+          }
+        });
+        break;
+      case 'illegal_transport':
+        setTransportFormData({
+          ...baseData,
+          violationType: draft.transportData?.violationType || '',
+          documentType: draft.transportData?.documentType || '',
+          volumeWeight: draft.transportData?.materialInfo?.volumeWeight || '',
+          unit: draft.transportData?.materialInfo?.unit || '',
+          vehicleType: draft.transportData?.vehicleInfo?.type || '',
+          vehicleDescription: draft.transportData?.vehicleInfo?.description || '',
+          bodyColor: draft.transportData?.vehicleInfo?.bodyColor || '',
+          plateNumber: draft.transportData?.vehicleInfo?.plateNumber || '',
+          ownerName: draft.transportData?.ownerOperator?.name || '',
+          ownerAddress: draft.transportData?.ownerOperator?.address || '',
+          driverName: draft.transportData?.driver?.name || '',
+          driverAddress: draft.transportData?.driver?.address || '',
+          sourceOfMaterials: draft.transportData?.sourceOfMaterials || '',
+          actionsTaken: draft.transportData?.actionsTaken || ''
+        });
+        break;
+      case 'illegal_processing':
+        setProcessingFormData({
+          ...baseData,
+          violationType: draft.processingData?.violationType || '',
+          documentType: draft.processingData?.documentType || '',
+          volumeWeight: draft.processingData?.materialInfo?.volumeWeight || '',
+          unit: draft.processingData?.materialInfo?.unit || '',
+          processingMethod: draft.processingData?.processingMethod || '',
+          equipmentUsed: draft.processingData?.equipmentUsed || '',
+          ownerName: draft.processingData?.ownerOperator?.name || '',
+          ownerAddress: draft.processingData?.ownerOperator?.address || '',
+          sourceOfMaterials: draft.processingData?.sourceOfMaterials || '',
+          actionsTaken: draft.processingData?.actionsTaken || ''
+        });
+        break;
+      case 'illegal_trading':
+        setTradingFormData({
+          ...baseData,
+          violationType: draft.tradingData?.violationType || '',
+          documentType: draft.tradingData?.documentType || '',
+          volumeWeight: draft.tradingData?.materialInfo?.volumeWeight || '',
+          unit: draft.tradingData?.materialInfo?.unit || '',
+          tradingMethod: draft.tradingData?.tradingMethod || '',
+          buyerName: draft.tradingData?.buyer?.name || '',
+          buyerAddress: draft.tradingData?.buyer?.address || '',
+          sellerName: draft.tradingData?.seller?.name || '',
+          sellerAddress: draft.tradingData?.seller?.address || '',
+          sourceOfMaterials: draft.tradingData?.sourceOfMaterials || '',
+          actionsTaken: draft.tradingData?.actionsTaken || ''
+        });
+        break;
+      case 'illegal_exploration':
+        setExplorationFormData({
+          ...baseData,
+          activities: {
+            drilling: draft.explorationData?.activities?.drilling || false,
+            testPitting: draft.explorationData?.activities?.testPitting || false,
+            trenching: draft.explorationData?.activities?.trenching || false,
+            shaftSinking: draft.explorationData?.activities?.shaftSinking || false,
+            tunneling: draft.explorationData?.activities?.tunneling || false,
+            others: draft.explorationData?.activities?.others || false
+          },
+          othersActivity: draft.explorationData?.othersActivity || '',
+          violationType: draft.explorationData?.violationType || '',
+          documentType: draft.explorationData?.documentType || '',
+          explorationMethod: draft.explorationData?.explorationMethod || '',
+          equipmentUsed: draft.explorationData?.equipmentUsed || '',
+          areaSize: draft.explorationData?.areaSize || '',
+          ownerName: draft.explorationData?.ownerOperator?.name || '',
+          ownerAddress: draft.explorationData?.ownerOperator?.address || '',
+          actionsTaken: draft.explorationData?.actionsTaken || ''
+        });
+        break;
+      case 'illegal_smallscale':
+        setSmallScaleMiningFormData({
+          ...baseData,
+          activities: {
+            extraction: draft.smallScaleData?.activities?.extraction || false,
+            disposition: draft.smallScaleData?.activities?.disposition || false,
+            mineralProcessing: draft.smallScaleData?.activities?.mineralProcessing || false,
+            tunneling: draft.smallScaleData?.activities?.tunneling || false,
+            shaftSinking: draft.smallScaleData?.activities?.shaftSinking || false,
+            goldPanning: draft.smallScaleData?.activities?.goldPanning || false,
+            amalgamation: draft.smallScaleData?.activities?.amalgamation || false,
+            others: draft.smallScaleData?.activities?.others || false
+          },
+          equipmentUsed: {
+            extraction: draft.smallScaleData?.equipmentUsed?.extraction || '',
+            disposition: draft.smallScaleData?.equipmentUsed?.disposition || '',
+            mineralProcessing: draft.smallScaleData?.equipmentUsed?.mineralProcessing || ''
+          },
+          othersActivity: draft.smallScaleData?.othersActivity || '',
+          observations: {
+            excavations: draft.smallScaleData?.observations?.excavations || false,
+            stockpiles: draft.smallScaleData?.observations?.stockpiles || false,
+            tunnels: draft.smallScaleData?.observations?.tunnels || false,
+            mineShafts: draft.smallScaleData?.observations?.mineShafts || false,
+            accessRoad: draft.smallScaleData?.observations?.accessRoad || false,
+            processingFacility: draft.smallScaleData?.observations?.processingFacility || false
+          },
+          interviewConducted: draft.smallScaleData?.interview?.conducted || false,
+          guideQuestions: {
+            question1: draft.smallScaleData?.interview?.responses?.question1 || '',
+            question2: draft.smallScaleData?.interview?.responses?.question2 || '',
+            question3: draft.smallScaleData?.interview?.responses?.question3 || '',
+            question4: draft.smallScaleData?.interview?.responses?.question4 || '',
+            question5: draft.smallScaleData?.interview?.responses?.question5 || '',
+            question6: draft.smallScaleData?.interview?.responses?.question6 || ''
+          }
+        });
+        break;
+      default:
+        setFormData(baseData);
+    }
+
+    // Set uploaded images if any
+    if (draft.attachments && draft.attachments.length > 0) {
+      setUploadedImages(draft.attachments.map((att, index) => ({
+        id: att.id || `draft_${Date.now()}_${index}`,
+        url: att.url || att.path,
+        uri: att.url || att.path,
+        preview: att.url || att.path,
+        publicId: att.publicId || '',
+        geotagged: att.geotagged || false,
+        uploadedAt: att.uploadedAt,
+        isUploaded: true,
+        type: att.type || 'image/jpeg',
+        name: att.name || `image_${index}.jpg`
+      })));
+    }
+  };
+
+  // GPS location handler
+  const handleGetCurrentLocation = async () => {
+    setIsLoadingLocation(true);
+    try {
+      const coordinates = await locationService.getCurrentLocation();
+      updateFormData('latitude', coordinates.latitude.toString());
+      updateFormData('longitude', coordinates.longitude.toString());
+    } catch (error) {
+      Alert.alert('Error', error.message);
+    } finally {
+      setIsLoadingLocation(false);
+    }
+  };
+
+  // Date and time handler
+  const handleUsePhoneDateTime = () => {
+    const now = new Date();
+    const date = now.toLocaleDateString('en-US', {
+      month: '2-digit',
+      day: '2-digit', 
+      year: 'numeric'
+    });
+    const time = now.toLocaleTimeString('en-US', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true
+    });
+    updateFormData('date', date);
+    updateFormData('time', time);
+  };
+
+  // Transportation form handlers
+  const handleTransportationGetCurrentLocation = async () => {
+    setIsLoadingTransportationLocation(true);
+    try {
+      const coordinates = await locationService.getCurrentLocation();
+      updateTransportationFormData('latitude', coordinates.latitude.toString());
+      updateTransportationFormData('longitude', coordinates.longitude.toString());
+    } catch (error) {
+      Alert.alert('Error', error.message);
+    } finally {
+      setIsLoadingTransportationLocation(false);
+    }
+  };
+
+  const handleTransportationUsePhoneDateTime = () => {
+    const now = new Date();
+    const date = now.toLocaleDateString('en-US', {
+      month: '2-digit',
+      day: '2-digit', 
+      year: 'numeric'
+    });
+    const time = now.toLocaleTimeString('en-US', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true
+    });
+    updateTransportationFormData('date', date);
+    updateTransportationFormData('time', time);
+  };
+
+  // Processing form handlers
+  const handleProcessingGetCurrentLocation = async () => {
+    setIsLoadingProcessingLocation(true);
+    try {
+      const coordinates = await locationService.getCurrentLocation();
+      updateProcessingFormData('latitude', coordinates.latitude.toString());
+      updateProcessingFormData('longitude', coordinates.longitude.toString());
+    } catch (error) {
+      Alert.alert('Error', error.message);
+    } finally {
+      setIsLoadingProcessingLocation(false);
+    }
+  };
+
+  const handleProcessingUsePhoneDateTime = () => {
+    const now = new Date();
+    const date = now.toLocaleDateString('en-US', {
+      month: '2-digit',
+      day: '2-digit', 
+      year: 'numeric'
+    });
+    const time = now.toLocaleTimeString('en-US', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true
+    });
+    updateProcessingFormData('date', date);
+    updateProcessingFormData('time', time);
+  };
+
+  // Trading form handlers
+  const handleTradingGetCurrentLocation = async () => {
+    setIsLoadingTradingLocation(true);
+    try {
+      const coordinates = await locationService.getCurrentLocation();
+      updateTradingFormData('latitude', coordinates.latitude.toString());
+      updateTradingFormData('longitude', coordinates.longitude.toString());
+    } catch (error) {
+      Alert.alert('Error', error.message);
+    } finally {
+      setIsLoadingTradingLocation(false);
+    }
+  };
+
+  const handleTradingUsePhoneDateTime = () => {
+    const now = new Date();
+    const date = now.toLocaleDateString('en-US', {
+      month: '2-digit',
+      day: '2-digit', 
+      year: 'numeric'
+    });
+    const time = now.toLocaleTimeString('en-US', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true
+    });
+    updateTradingFormData('date', date);
+    updateTradingFormData('time', time);
+  };
+
+  // Exploration form handlers
+  const handleExplorationGetCurrentLocation = async () => {
+    setIsLoadingExplorationLocation(true);
+    try {
+      const coordinates = await locationService.getCurrentLocation();
+      updateExplorationFormData('latitude', coordinates.latitude.toString());
+      updateExplorationFormData('longitude', coordinates.longitude.toString());
+    } catch (error) {
+      Alert.alert('Error', error.message);
+    } finally {
+      setIsLoadingExplorationLocation(false);
+    }
+  };
+
+  const handleExplorationUsePhoneDateTime = () => {
+    const now = new Date();
+    const date = now.toLocaleDateString('en-US', {
+      month: '2-digit',
+      day: '2-digit', 
+      year: 'numeric'
+    });
+    const time = now.toLocaleTimeString('en-US', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true
+    });
+    updateExplorationFormData('date', date);
+    updateExplorationFormData('time', time);
+  };
+
+  // Small Scale Mining form handlers
+  const handleSmallScaleMiningGetCurrentLocation = async () => {
+    setIsLoadingSmallScaleMiningLocation(true);
+    try {
+      const coordinates = await locationService.getCurrentLocation();
+      updateSmallScaleMiningFormData('latitude', coordinates.latitude.toString());
+      updateSmallScaleMiningFormData('longitude', coordinates.longitude.toString());
+    } catch (error) {
+      Alert.alert('Error', error.message);
+    } finally {
+      setIsLoadingSmallScaleMiningLocation(false);
+    }
+  };
+
+  const handleSmallScaleMiningUsePhoneDateTime = () => {
+    const now = new Date();
+    const date = now.toLocaleDateString('en-US', {
+      month: '2-digit',
+      day: '2-digit', 
+      year: 'numeric'
+    });
+    const time = now.toLocaleTimeString('en-US', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true
+    });
+    updateSmallScaleMiningFormData('date', date);
+    updateSmallScaleMiningFormData('time', time);
+  };
+
+  // Image Upload Functions
+  const handleImageUpload = async () => {
+    if (isUploadingImages) return;
+
+    try {
+      // First, pick images for preview
+      const images = await imageService.pickImagesForPreview(5);
+      
+      if (images.length === 0) return;
+
+      // Validate image sizes
+      const oversizedImages = images.filter(img => {
+        const validation = imageService.validateImageSize(img, 10);
+        return !validation.valid;
+      });
+
+      if (oversizedImages.length > 0) {
+        Alert.alert(
+          'Image Size Error',
+          `${oversizedImages.length} image(s) exceed the 10MB size limit. Please select smaller images.`,
+          [{ text: 'OK' }]
+        );
+        return;
+      }
+
+      // Add images to preview state immediately
+      setUploadedImages(prev => [...prev, ...images]);
+
+      // Show success message for image selection
+      Alert.alert(
+        'Images Selected',
+        `${images.length} image(s) selected and ready for upload. They will be uploaded when you submit the report.`,
+        [{ text: 'OK' }]
+      );
+
+    } catch (error) {
+      console.error('Error selecting images:', error);
+      Alert.alert(
+        'Selection Error',
+        'An error occurred while selecting images. Please try again.',
+        [{ text: 'OK' }]
+      );
+    }
+  };
+
+  // Function to upload images when submitting report
+  const uploadSelectedImages = async (selectedImages) => {
+    try {
+      const imagesToUpload = selectedImages.filter(img => !img.isUploaded);
+      if (imagesToUpload.length === 0) return [];
+
+      const uploadResults = await imageService.uploadMultipleImages(imagesToUpload);
+      return uploadResults.successful || [];
+    } catch (error) {
+      console.error('Error uploading selected images:', error);
+      return [];
+    }
+  };
+
+  // Image Preview and Management Functions
+  const openImagePreview = (images, startIndex = 0) => {
+    setCurrentImages(images);
+    setSelectedImageIndex(startIndex);
+    setShowImagePreview(true);
+  };
+
+  const closeImagePreview = () => {
+    setShowImagePreview(false);
+    setIsEditingImages(false);
+    setSelectedImageIndex(0);
+    setCurrentImages([]);
+  };
+
+  const handleDeleteImageFromPreview = async (imageIndex) => {
+    try {
+      const imageToDelete = currentImages[imageIndex];
+      
+      Alert.alert(
+        'Delete Image',
+        'Are you sure you want to delete this image?',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Delete',
+            style: 'destructive',
+            onPress: async () => {
+              // Remove from current images
+              const updatedImages = currentImages.filter((_, index) => index !== imageIndex);
+              setCurrentImages(updatedImages);
+              
+              // If this was the last image, close preview
+              if (updatedImages.length === 0) {
+                closeImagePreview();
+                return;
+              }
+              
+              // Adjust selected index if needed
+              if (selectedImageIndex >= updatedImages.length) {
+                setSelectedImageIndex(updatedImages.length - 1);
+              }
+              
+              // Update the source (report or draft) images
+              if (selectedReport) {
+                setSelectedReport(prev => ({
+                  ...prev,
+                  attachments: updatedImages
+                }));
+              } else if (selectedDraft) {
+                setSelectedDraft(prev => ({
+                  ...prev,
+                  attachments: updatedImages
+                }));
+              }
+            }
+          }
+        ]
+      );
+    } catch (error) {
+      console.error('Error deleting image:', error);
+      Alert.alert('Error', 'Failed to delete image. Please try again.');
+    }
+  };
+
+  const handleAddNewImages = async () => {
+    try {
+      setIsUploadingNewImages(true);
+      
+      const newImages = await imageService.pickImagesForPreview(5);
+      if (newImages.length === 0) return;
+      
+      // Add new images to current images
+      const updatedImages = [...currentImages, ...newImages];
+      setCurrentImages(updatedImages);
+      
+      // Update the source (report or draft) images
+      if (selectedReport) {
+        setSelectedReport(prev => ({
+          ...prev,
+          attachments: updatedImages
+        }));
+      } else if (selectedDraft) {
+        setSelectedDraft(prev => ({
+          ...prev,
+          attachments: updatedImages
+        }));
+      }
+      
+      Alert.alert('Success', `${newImages.length} image(s) added successfully!`);
+    } catch (error) {
+      console.error('Error adding new images:', error);
+      Alert.alert('Error', 'Failed to add new images. Please try again.');
+    } finally {
+      setIsUploadingNewImages(false);
+    }
+  };
+
+  const handleRemoveImage = (index) => {
+    Alert.alert(
+      'Remove Image',
+      'Are you sure you want to remove this image?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: () => {
+            setUploadedImages(prev => prev.filter((_, i) => i !== index));
+          }
+        }
+      ]
+    );
+  };
+
   const handleCategorySelect = (category) => {
     if (!canReport) {
       Alert.alert(
@@ -955,35 +1741,495 @@ export default function Reports() {
     setShowChecklistModal(true);
   };
 
-  const handleSubmitReport = () => {
-    Alert.alert(
-      'Submit Report',
-      'Submit this report directly to MGB CALABARZON?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Submit',
-          onPress: () => {
-            Alert.alert('Success', 'Report submitted to MGB CALABARZON successfully!');
-            setShowChecklistModal(false);
-            setSelectedCategory(null);
+  const handleSubmitReport = async () => {
+    if (isSubmitting) return;
+
+    // Get current form data based on selected category
+    let currentFormData;
+    switch (selectedCategory?.id) {
+      case 'illegal_mining':
+        currentFormData = formData;
+        break;
+      case 'illegal_transport':
+        currentFormData = transportFormData;
+        break;
+      case 'illegal_processing':
+        currentFormData = processingFormData;
+        break;
+      case 'illegal_trading':
+        currentFormData = tradingFormData;
+        break;
+      case 'illegal_exploration':
+        currentFormData = explorationFormData;
+        break;
+      case 'illegal_smallscale':
+        currentFormData = smallScaleMiningFormData;
+        break;
+      default:
+        currentFormData = formData;
+    }
+
+    // Basic validation
+    if (!currentFormData.latitude || !currentFormData.longitude || !currentFormData.location) {
+      Alert.alert('Validation Error', 'GPS coordinates and location are required.');
+      return;
+    }
+
+    if (!currentFormData.date || !currentFormData.time) {
+      Alert.alert('Validation Error', 'Date and time are required.');
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      // First, upload any selected images that haven't been uploaded yet
+      let finalAttachments = [];
+      if (uploadedImages.length > 0) {
+        const uploadedImageResults = await uploadSelectedImages(uploadedImages);
+        finalAttachments = uploadedImageResults.map(img => ({
+          url: img.url,
+          publicId: img.publicId,
+          type: 'image',
+          geotagged: img.geotagged || false,
+          uploadedAt: img.uploadedAt
+        }));
+      }
+
+      const reportData = {
+        type: selectedCategory.id,
+        reporterId: user?.id || user?.username,
+        language: language,
+        ...currentFormData,
+        attachments: finalAttachments
+      };
+
+      const result = await reportService.submitReport(reportData);
+      
+      if (result.success) {
+        // If this was a draft being submitted, delete it from drafts
+        if (isEditingMode && editingDraft) {
+          try {
+            await reportService.deleteDraft(editingDraft._id);
+            console.log('Draft deleted successfully after submission');
+          } catch (deleteError) {
+            console.error('Error deleting draft after submission:', deleteError);
+            // Don't show error to user as the main submission was successful
           }
         }
-      ]
-    );
+
+        Alert.alert('Success', 'Report submitted successfully!', [
+          { 
+            text: 'OK', 
+            onPress: () => {
+              resetAllForms();
+              setUploadedImages([]);
+              setShowChecklistModal(false);
+              setSelectedCategory(null);
+              setEditingDraft(null);
+              setIsEditingMode(false);
+              // Refresh the reports list to show the new report and remove from drafts
+              refreshReports();
+            }
+          }
+        ]);
+      } else {
+        Alert.alert('Error', result.message || 'Failed to submit report');
+      }
+    } catch (error) {
+      console.error('Error submitting report:', error);
+      Alert.alert('Error', 'An error occurred while submitting the report');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'Under Investigation':
-        return '#FF9800';
-      case 'Resolved':
-        return COLORS.primary;
-      case 'Pending Review':
-        return '#2196F3';
-      default:
-        return COLORS.textSecondary;
+  // GPS and Image Components
+  const renderGPSSection = (currentFormData, translations) => (
+    <View style={styles.section}>
+      <Text style={styles.sectionTitle}>{translations.gpsLocation}</Text>
+      
+      <View style={styles.gpsContainer}>
+        <View style={styles.gpsRow}>
+          <View style={styles.gpsField}>
+            <Text style={styles.label}>{translations.latitude}</Text>
+            <TextInput
+              style={styles.input}
+              value={currentFormData.latitude}
+              onChangeText={(text) => {
+                switch (selectedCategory?.id) {
+                  case 'illegal_mining':
+                    updateFormData('latitude', text);
+                    break;
+                  case 'illegal_transport':
+                    updateTransportFormData('latitude', text);
+                    break;
+                  case 'illegal_processing':
+                    updateProcessingFormData('latitude', text);
+                    break;
+                  case 'illegal_trading':
+                    updateTradingFormData('latitude', text);
+                    break;
+                  case 'illegal_exploration':
+                    updateExplorationFormData('latitude', text);
+                    break;
+                  case 'illegal_smallscale':
+                    updateSmallScaleMiningFormData('latitude', text);
+                    break;
+                }
+              }}
+              placeholder="0.000000"
+              keyboardType="numeric"
+            />
+          </View>
+          
+          <View style={styles.gpsField}>
+            <Text style={styles.label}>{translations.longitude}</Text>
+            <TextInput
+              style={styles.input}
+              value={currentFormData.longitude}
+              onChangeText={(text) => {
+                switch (selectedCategory?.id) {
+                  case 'illegal_mining':
+                    updateFormData('longitude', text);
+                    break;
+                  case 'illegal_transport':
+                    updateTransportFormData('longitude', text);
+                    break;
+                  case 'illegal_processing':
+                    updateProcessingFormData('longitude', text);
+                    break;
+                  case 'illegal_trading':
+                    updateTradingFormData('longitude', text);
+                    break;
+                  case 'illegal_exploration':
+                    updateExplorationFormData('longitude', text);
+                    break;
+                  case 'illegal_smallscale':
+                    updateSmallScaleMiningFormData('longitude', text);
+                    break;
+                }
+              }}
+              placeholder="0.000000"
+              keyboardType="numeric"
+            />
+          </View>
+        </View>
+        
+        <TouchableOpacity
+          style={[styles.gpsButton, isLoadingLocation && styles.buttonDisabled]}
+          onPress={handleGetCurrentLocation}
+          disabled={isLoadingLocation}
+        >
+          <Ionicons 
+            name={isLoadingLocation ? "refresh" : "location"} 
+            size={20} 
+            color="white" 
+            style={isLoadingLocation ? { transform: [{ rotate: '180deg' }] } : {}}
+          />
+          <Text style={styles.gpsButtonText}>
+            {isLoadingLocation ? 'Getting Location...' : translations.getCoordinates}
+          </Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+
+  const renderImageSection = (translations) => (
+    <View style={styles.section}>
+      <Text style={styles.sectionTitle}>
+        {language === 'english' ? 'Photo Evidence' : 'Patunay na Larawan'}
+      </Text>
+      
+      <TouchableOpacity
+        style={[styles.imageUploadButton, isUploadingImages && styles.buttonDisabled]}
+        onPress={handleImageUpload}
+        disabled={isUploadingImages}
+      >
+        <Ionicons 
+          name={isUploadingImages ? "cloud-upload" : "camera"} 
+          size={20} 
+          color="white" 
+        />
+        <Text style={styles.imageUploadButtonText}>
+          {isUploadingImages 
+            ? (language === 'english' ? 'Uploading...' : 'Nag-uupload...')
+            : (language === 'english' ? 'Add Photos from Gallery' : 'Magdagdag ng Larawan mula sa Gallery')
+          }
+        </Text>
+      </TouchableOpacity>
+
+      {uploadedImages.length > 0 && (
+        <View style={styles.imagePreviewContainer}>
+          <Text style={styles.imagePreviewTitle}>
+            {language === 'english' 
+              ? `Uploaded Images (${uploadedImages.length})` 
+              : `Mga Na-upload na Larawan (${uploadedImages.length})`
+            }
+          </Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.imageScrollView}>
+            {uploadedImages.map((image, index) => (
+              <View key={index} style={styles.imagePreviewItem}>
+                <TouchableOpacity
+                  onPress={() => openImagePreview(uploadedImages, index)}
+                  style={styles.imagePreviewTouchable}
+                >
+                  <Image 
+                    source={{ uri: image.url || image.uri || image.preview }} 
+                    style={styles.imagePreview}
+                    onError={(error) => {
+                      console.log('Form image preview error:', error.nativeEvent.error);
+                    }}
+                  />
+                  <View style={styles.imagePreviewOverlayIcon}>
+                    <Ionicons name="eye" size={16} color="white" />
+                  </View>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.removeImageButton}
+                  onPress={() => handleRemoveImage(index)}
+                >
+                  <Ionicons name="close-circle" size={24} color="#ff4444" />
+                </TouchableOpacity>
+                {image.geotagged && (
+                  <View style={styles.geotaggedIndicator}>
+                    <Ionicons name="location" size={12} color="white" />
+                  </View>
+                )}
+              </View>
+            ))}
+          </ScrollView>
+        </View>
+      )}
+    </View>
+  );
+
+  // Helper function to reset all forms
+  // Ensure form data is properly initialized
+  useEffect(() => {
+    // Initialize activities object if it doesn't exist
+    if (!formData.activities) {
+      setFormData(prev => ({
+        ...prev,
+        activities: {
+          extraction: false,
+          disposition: false,
+          processing: false
+        }
+      }));
     }
+    
+    // Initialize small scale mining activities if they don't exist
+    if (!smallScaleMiningFormData.activities) {
+      setSmallScaleMiningFormData(prev => ({
+        ...prev,
+        activities: {
+          extraction: false,
+          disposition: false,
+          mineralProcessing: false,
+          tunneling: false,
+          shaftSinking: false,
+          goldPanning: false,
+          amalgamation: false,
+          others: false
+        },
+        equipmentUsed: {
+          extraction: '',
+          disposition: '',
+          mineralProcessing: ''
+        }
+      }));
+    }
+    
+    // Initialize exploration activities if they don't exist
+    if (!explorationFormData.activities) {
+      setExplorationFormData(prev => ({
+        ...prev,
+        activities: {
+          drilling: false,
+          testPitting: false,
+          trenching: false,
+          shaftSinking: false,
+          tunneling: false,
+          others: false
+        }
+      }));
+    }
+  }, []);
+
+  const resetAllForms = () => {
+    setFormData({
+      latitude: '',
+      longitude: '',
+      location: '',
+      date: '',
+      time: '',
+      hasSignboard: null,
+      projectName: '',
+      commodity: '',
+      siteStatus: 'Operating',
+      activities: {
+        extraction: false,
+        disposition: false,
+        processing: false
+      },
+      extractionEquipment: [],
+      dispositionEquipment: [],
+      processingEquipment: [],
+      operatorName: '',
+      operatorAddress: '',
+      operatorDetermination: '',
+      additionalInfo: '',
+      nonOperatingObservations: {
+        excavations: false,
+        accessRoad: false,
+        processingFacility: false
+      },
+      conductedInterview: null,
+      guideQuestions: {
+        recentActivity: '',
+        excavationStart: '',
+        transportVehicles: '',
+        operatorName: '',
+        operatorAddress: '',
+        permits: ''
+      }
+    });
+
+    setTransportFormData({
+      latitude: '',
+      longitude: '',
+      location: '',
+      date: '',
+      time: '',
+      violationType: null,
+      documentType: '',
+      commodity: '',
+      volumeWeight: '',
+      unit: '',
+      vehicleType: '',
+      vehicleDescription: '',
+      vehicleBodyColor: '',
+      plateNumber: '',
+      ownerOperator: '',
+      ownerAddress: '',
+      driver: '',
+      driverAddress: '',
+      sourceOfMaterials: '',
+      actionsTaken: '',
+      additionalInfo: ''
+    });
+
+    setProcessingFormData({
+      latitude: '',
+      longitude: '',
+      location: '',
+      date: '',
+      time: '',
+      hasSignboard: null,
+      projectName: '',
+      siteStatus: 'Operating',
+      facilityType: '',
+      processingProducts: '',
+      operatorName: '',
+      operatorAddress: '',
+      operatorDetermination: '',
+      rawMaterialsName: '',
+      rawMaterialsLocation: '',
+      rawMaterialsDetermination: '',
+      additionalInfo: ''
+    });
+
+    setTradingFormData({
+      latitude: '',
+      longitude: '',
+      location: '',
+      date: '',
+      time: '',
+      violationType: true,
+      businessName: '',
+      businessOwner: '',
+      businessLocation: '',
+      commodity: '',
+      sourceOfCommodityName: '',
+      sourceOfCommodityLocation: '',
+      sourceOfCommodityDetermination: '',
+      stockpiledMaterials: null,
+      dtiRegistration: null,
+      additionalInfo: ''
+    });
+
+    setExplorationFormData({
+      latitude: '',
+      longitude: '',
+      location: '',
+      date: '',
+      time: '',
+      hasSignboard: null,
+      projectName: '',
+      activities: {
+        drilling: false,
+        testPitting: false,
+        trenching: false,
+        shaftSinking: false,
+        tunneling: false,
+        others: false
+      },
+      othersActivity: '',
+      operatorName: '',
+      operatorAddress: '',
+      operatorDetermination: '',
+      additionalInfo: ''
+    });
+
+    setSmallScaleMiningFormData({
+      latitude: '',
+      longitude: '',
+      location: '',
+      date: '',
+      time: '',
+      hasSignboard: null,
+      projectName: '',
+      commodity: '',
+      siteStatus: 'operating',
+      activities: {
+        extraction: false,
+        disposition: false,
+        mineralProcessing: false,
+        tunneling: false,
+        shaftSinking: false,
+        goldPanning: false,
+        amalgamation: false,
+        others: false
+      },
+      equipmentUsed: {
+        extraction: '',
+        disposition: '',
+        mineralProcessing: ''
+      },
+      othersActivity: '',
+      operatorName: '',
+      operatorAddress: '',
+      operatorDetermination: '',
+      observations: {
+        excavations: false,
+        stockpiles: false,
+        tunnels: false,
+        mineShafts: false,
+        accessRoad: false,
+        processingFacility: false
+      },
+      interviewConducted: false,
+      interviewAnswers: {
+        question1: '',
+        question2: '',
+        question3: '',
+        question4: '',
+        question5: '',
+        question6: ''
+      },
+      additionalInfo: ''
+    });
   };
 
   const CategoryCard = ({ category, index }) => {
@@ -999,16 +2245,49 @@ export default function Reports() {
   };
 
   const ReportCard = ({ item, index }) => {
-    const category = violationCategories.find(cat => cat.id === item.category);
-    const categoryTitle = category ? (language === 'english' ? category.english : category.filipino) : 'Unknown Category';
+    const categoryTitle = getReportTypeTitle(item.reportType);
+    const isDraft = activeTab === 'drafts' || item.status === 'draft';
+    
+    const handleCardPress = () => {
+      if (isDraft) {
+        // Show options: View Details or Edit
+        Alert.alert(
+          'Draft Options',
+          'What would you like to do with this draft?',
+          [
+            {
+              text: 'View Details',
+              onPress: () => {
+                setSelectedDraft(item);
+                setShowDraftDetail(true);
+              }
+            },
+            {
+              text: 'Edit Draft',
+              onPress: () => handleEditDraft(item)
+            },
+            {
+              text: 'Cancel',
+              style: 'cancel'
+            }
+          ]
+        );
+      } else {
+        setSelectedReport(item);
+        setShowReportDetail(true);
+      }
+    };
     
     return (
-      <View style={styles.reportCard}>
+      <TouchableOpacity 
+        style={styles.reportCard}
+        onPress={handleCardPress}
+      >
         <View style={styles.cardHeader}>
           <View style={styles.cardTitleContainer}>
-            <Text style={styles.cardTitle}>{categoryTitle}</Text>
-            <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) }]}>
-              <Text style={styles.statusText}>{item.status}</Text>
+            <Text style={styles.cardTitle} numberOfLines={2}>{categoryTitle}</Text>
+            <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status || 'draft') }]}>
+              <Text style={styles.statusText}>{getStatusText(item.status || 'draft')}</Text>
             </View>
           </View>
         </View>
@@ -1016,22 +2295,316 @@ export default function Reports() {
         <View style={styles.cardInfo}>
           <View style={styles.infoRow}>
             <Ionicons name="document-text-outline" size={16} color={COLORS.textSecondary} />
-            <Text style={styles.infoText}>{item.id}</Text>
+            <Text style={styles.infoText} numberOfLines={1}>{item.reportId || 'Draft'}</Text>
           </View>
           <View style={styles.infoRow}>
             <Ionicons name="location-outline" size={16} color={COLORS.textSecondary} />
-            <Text style={styles.infoText}>{item.location}</Text>
+            <Text style={styles.infoText} numberOfLines={2}>{item.location || 'No location specified'}</Text>
           </View>
           <View style={styles.infoRow}>
             <Ionicons name="calendar-outline" size={16} color={COLORS.textSecondary} />
-            <Text style={styles.infoText}>{item.dateReported}</Text>
+            <Text style={styles.infoText}>{formatDate(item.submittedAt || item.createdAt)}</Text>
           </View>
-          <View style={styles.infoRow}>
-            <Ionicons name="person-outline" size={16} color={COLORS.textSecondary} />
-            <Text style={styles.infoText}>{item.submittedBy}</Text>
+          {item.submittedBy && (
+            <View style={styles.infoRow}>
+              <Ionicons name="person-outline" size={16} color={COLORS.textSecondary} />
+              <Text style={styles.infoText} numberOfLines={1}>{item.submittedBy}</Text>
+            </View>
+          )}
+        </View>
+        
+        <View style={styles.cardFooter}>
+          {isDraft ? (
+            <View style={styles.draftActions}>
+              <Text style={styles.draftActionText}>Tap for options</Text>
+              <Ionicons name="ellipsis-horizontal" size={16} color={COLORS.primary} />
+            </View>
+          ) : (
+            <View style={styles.draftActions}>
+              <Text style={styles.draftActionText}>Tap to view</Text>
+              <Ionicons name="eye" size={16} color={COLORS.primary} />
+            </View>
+          )}
+        </View>
+      </TouchableOpacity>
+    );
+  };
+
+  const ReportDetailModal = () => {
+    if (!selectedReport) return null;
+    
+    return (
+      <Modal visible={showReportDetail} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={styles.detailModalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Report Details</Text>
+              <TouchableOpacity onPress={() => setShowReportDetail(false)}>
+                <Ionicons name="close" size={24} color={COLORS.textPrimary} />
+              </TouchableOpacity>
+            </View>
+            
+            <ScrollView style={styles.detailScrollView}>
+              {/* Report Type */}
+              <View style={styles.detailSection}>
+                <Text style={styles.detailLabel}>Report Type</Text>
+                <Text style={styles.detailValue}>{getReportTypeTitle(selectedReport.reportType)}</Text>
+              </View>
+              
+              {/* Status */}
+              <View style={styles.detailSection}>
+                <Text style={styles.detailLabel}>Status</Text>
+                <View style={[styles.statusBadge, { backgroundColor: getStatusColor(selectedReport.status) }]}>
+                  <Text style={styles.statusText}>{getStatusText(selectedReport.status)}</Text>
+                </View>
+              </View>
+              
+              {/* Report ID */}
+              <View style={styles.detailSection}>
+                <Text style={styles.detailLabel}>Report ID</Text>
+                <Text style={styles.detailValue}>{selectedReport.reportId}</Text>
+              </View>
+              
+              {/* Location */}
+              <View style={styles.detailSection}>
+                <Text style={styles.detailLabel}>Location</Text>
+                <Text style={styles.detailValue}>{selectedReport.location}</Text>
+              </View>
+              
+              {/* GPS Coordinates */}
+              {selectedReport.gpsLocation && (
+                <View style={styles.detailSection}>
+                  <Text style={styles.detailLabel}>GPS Coordinates</Text>
+                  <Text style={styles.detailValue}>
+                    Lat: {selectedReport.gpsLocation.latitude}, Lng: {selectedReport.gpsLocation.longitude}
+                  </Text>
+                </View>
+              )}
+              
+              {/* Date & Time */}
+              <View style={styles.detailSection}>
+                <Text style={styles.detailLabel}>Incident Date & Time</Text>
+                <Text style={styles.detailValue}>
+                  {selectedReport.incidentDate} at {selectedReport.incidentTime}
+                </Text>
+              </View>
+              
+              {/* Commodity */}
+              {selectedReport.commodity && (
+                <View style={styles.detailSection}>
+                  <Text style={styles.detailLabel}>Commodity</Text>
+                  <Text style={styles.detailValue}>{selectedReport.commodity}</Text>
+                </View>
+              )}
+              
+              {/* Site Status */}
+              {selectedReport.siteStatus && (
+                <View style={styles.detailSection}>
+                  <Text style={styles.detailLabel}>Site Status</Text>
+                  <Text style={styles.detailValue}>{selectedReport.siteStatus}</Text>
+                </View>
+              )}
+              
+              {/* Additional Information */}
+              {selectedReport.additionalInfo && (
+                <View style={styles.detailSection}>
+                  <Text style={styles.detailLabel}>Additional Information</Text>
+                  <Text style={styles.detailValue}>{selectedReport.additionalInfo}</Text>
+                </View>
+              )}
+              
+              {/* Submitted By */}
+              <View style={styles.detailSection}>
+                <Text style={styles.detailLabel}>Submitted By</Text>
+                <Text style={styles.detailValue}>{selectedReport.submittedBy}</Text>
+              </View>
+              
+              {/* Submitted Date */}
+              <View style={styles.detailSection}>
+                <Text style={styles.detailLabel}>Submitted Date</Text>
+                <Text style={styles.detailValue}>{formatDate(selectedReport.submittedAt || selectedReport.createdAt)}</Text>
+              </View>
+              
+              {/* Attachments */}
+              {selectedReport.attachments && selectedReport.attachments.length > 0 && (
+                <View style={styles.detailSection}>
+                  <Text style={styles.detailLabel}>Attachments ({selectedReport.attachments.length})</Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.attachmentScrollView}>
+                    {selectedReport.attachments.map((attachment, index) => (
+                      <TouchableOpacity
+                        key={index}
+                        style={styles.attachmentThumbnail}
+                        onPress={() => openImagePreview(selectedReport.attachments, index)}
+                      >
+                        <Image 
+                          source={{ uri: attachment.url || attachment.uri || attachment.preview }} 
+                          style={styles.thumbnailImage}
+                          resizeMode="cover"
+                          onError={(error) => {
+                            console.log('Report image load error:', error.nativeEvent.error);
+                          }}
+                        />
+                        <View style={styles.thumbnailOverlay}>
+                          <Ionicons name="eye" size={16} color="white" />
+                        </View>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                  <TouchableOpacity 
+                    style={styles.viewAllImagesButton}
+                    onPress={() => openImagePreview(selectedReport.attachments, 0)}
+                  >
+                    <Ionicons name="images" size={16} color={COLORS.primary} />
+                    <Text style={styles.viewAllImagesText}>View All Images</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </ScrollView>
           </View>
         </View>
-      </View>
+      </Modal>
+    );
+  };
+  
+  const DraftDetailModal = () => {
+    if (!selectedDraft) return null;
+    
+    return (
+      <Modal visible={showDraftDetail} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={styles.detailModalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Draft Details</Text>
+              <TouchableOpacity onPress={() => setShowDraftDetail(false)}>
+                <Ionicons name="close" size={24} color={COLORS.textPrimary} />
+              </TouchableOpacity>
+            </View>
+            
+            <ScrollView style={styles.detailScrollView}>
+              {/* Report Type */}
+              <View style={styles.detailSection}>
+                <Text style={styles.detailLabel}>Report Type</Text>
+                <Text style={styles.detailValue}>{getReportTypeTitle(selectedDraft.reportType)}</Text>
+              </View>
+              
+              {/* Status */}
+              <View style={styles.detailSection}>
+                <Text style={styles.detailLabel}>Status</Text>
+                <View style={[styles.statusBadge, { backgroundColor: getStatusColor('draft') }]}>
+                  <Text style={styles.statusText}>Draft</Text>
+                </View>
+              </View>
+              
+              {/* Location */}
+              {selectedDraft.location && (
+                <View style={styles.detailSection}>
+                  <Text style={styles.detailLabel}>Location</Text>
+                  <Text style={styles.detailValue}>{selectedDraft.location}</Text>
+                </View>
+              )}
+              
+              {/* GPS Coordinates */}
+              {selectedDraft.gpsLocation && (
+                <View style={styles.detailSection}>
+                  <Text style={styles.detailLabel}>GPS Coordinates</Text>
+                  <Text style={styles.detailValue}>
+                    Lat: {selectedDraft.gpsLocation.latitude}, Lng: {selectedDraft.gpsLocation.longitude}
+                  </Text>
+                </View>
+              )}
+              
+              {/* Date & Time */}
+              {(selectedDraft.incidentDate || selectedDraft.incidentTime) && (
+                <View style={styles.detailSection}>
+                  <Text style={styles.detailLabel}>Incident Date & Time</Text>
+                  <Text style={styles.detailValue}>
+                    {selectedDraft.incidentDate || 'Not specified'} at {selectedDraft.incidentTime || 'Not specified'}
+                  </Text>
+                </View>
+              )}
+              
+              {/* Commodity */}
+              {selectedDraft.commodity && (
+                <View style={styles.detailSection}>
+                  <Text style={styles.detailLabel}>Commodity</Text>
+                  <Text style={styles.detailValue}>{selectedDraft.commodity}</Text>
+                </View>
+              )}
+              
+              {/* Site Status */}
+              {selectedDraft.siteStatus && (
+                <View style={styles.detailSection}>
+                  <Text style={styles.detailLabel}>Site Status</Text>
+                  <Text style={styles.detailValue}>{selectedDraft.siteStatus}</Text>
+                </View>
+              )}
+              
+              {/* Additional Information */}
+              {selectedDraft.additionalInfo && (
+                <View style={styles.detailSection}>
+                  <Text style={styles.detailLabel}>Additional Information</Text>
+                  <Text style={styles.detailValue}>{selectedDraft.additionalInfo}</Text>
+                </View>
+              )}
+              
+              {/* Created Date */}
+              <View style={styles.detailSection}>
+                <Text style={styles.detailLabel}>Created Date</Text>
+                <Text style={styles.detailValue}>{formatDate(selectedDraft.createdAt)}</Text>
+              </View>
+              
+              {/* Attachments */}
+              {selectedDraft.attachments && selectedDraft.attachments.length > 0 && (
+                <View style={styles.detailSection}>
+                  <Text style={styles.detailLabel}>Attachments ({selectedDraft.attachments.length})</Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.attachmentScrollView}>
+                    {selectedDraft.attachments.map((attachment, index) => (
+                      <TouchableOpacity
+                        key={index}
+                        style={styles.attachmentThumbnail}
+                        onPress={() => openImagePreview(selectedDraft.attachments, index)}
+                      >
+                        <Image 
+                          source={{ uri: attachment.url || attachment.uri || attachment.preview }} 
+                          style={styles.thumbnailImage}
+                          resizeMode="cover"
+                          onError={(error) => {
+                            console.log('Draft image load error:', error.nativeEvent.error);
+                          }}
+                        />
+                        <View style={styles.thumbnailOverlay}>
+                          <Ionicons name="eye" size={16} color="white" />
+                        </View>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                  <TouchableOpacity 
+                    style={styles.viewAllImagesButton}
+                    onPress={() => openImagePreview(selectedDraft.attachments, 0)}
+                  >
+                    <Ionicons name="images" size={16} color={COLORS.primary} />
+                    <Text style={styles.viewAllImagesText}>View All Images</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </ScrollView>
+            
+            {/* Action Buttons */}
+            <View style={styles.modalActions}>
+              <TouchableOpacity 
+                style={styles.editDraftButton}
+                onPress={() => {
+                  setShowDraftDetail(false);
+                  handleEditDraft(selectedDraft);
+                }}
+              >
+                <Ionicons name="create" size={20} color={COLORS.white} />
+                <Text style={styles.editDraftButtonText}>Edit Draft</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     );
   };
 
@@ -1118,8 +2691,19 @@ export default function Reports() {
             />
           </View>
         </View>
-        <TouchableOpacity style={styles.getLocationButton}>
-          <Text style={styles.getLocationText}>{t.getCoordinates}</Text>
+        <TouchableOpacity 
+          style={[styles.getLocationButton, isLoadingTransportationLocation && styles.buttonDisabled]}
+          onPress={handleTransportationGetCurrentLocation}
+          disabled={isLoadingTransportationLocation}
+        >
+          {isLoadingTransportationLocation && (
+            <View style={styles.loadingContainer}>
+              <View style={styles.spinner} />
+            </View>
+          )}
+          <Text style={styles.getLocationText}>
+            {isLoadingTransportationLocation ? 'Getting Location...' : t.getCoordinates}
+          </Text>
         </TouchableOpacity>
       </View>
 
@@ -1156,7 +2740,7 @@ export default function Reports() {
             />
           </View>
         </View>
-        <TouchableOpacity style={styles.usePhoneButton}>
+        <TouchableOpacity style={styles.usePhoneButton} onPress={handleUsePhoneDateTime}>
           <Text style={styles.usePhoneText}>{t.usePhoneDateTime}</Text>
         </TouchableOpacity>
       </View>
@@ -1220,21 +2804,21 @@ export default function Reports() {
                 'Site Status',
                 'Select site status',
                 [
-                  { text: t.operating, onPress: () => updateFormData('siteStatus', 'Operating') },
-                  { text: t.nonOperating, onPress: () => updateFormData('siteStatus', 'Non-operating') },
+                  { text: t.operating, onPress: () => updateFormData('siteStatus', 'operating') },
+                  { text: t.nonOperating, onPress: () => updateFormData('siteStatus', 'non_operating') },
                   { text: 'Cancel', style: 'cancel' }
                 ]
               );
             }}
           >
-            <Text style={styles.dropdownText}>{formData.siteStatus === 'Operating' ? t.operating : t.nonOperating}</Text>
+            <Text style={styles.dropdownText}>{formData.siteStatus === 'operating' ? t.operating : t.nonOperating}</Text>
             <Ionicons name="chevron-down" size={20} color={COLORS.textSecondary} />
           </TouchableOpacity>
         </View>
       </View>
 
       {/* Operating Status Activities */}
-      {formData.siteStatus === 'Operating' && (
+      {formData.siteStatus === 'operating' && (
         <View style={styles.operatingSection}>
           <Text style={styles.operatingNote}>{t.operatingNote}</Text>
           
@@ -1243,27 +2827,27 @@ export default function Reports() {
             <View style={styles.activitiesContainer}>
               <TouchableOpacity 
                 style={styles.activityRow}
-                onPress={() => updateNestedFormData('activities', 'extraction', !formData.activities.extraction)}
+                onPress={() => updateNestedFormData('activities', 'extraction', !formData.activities?.extraction)}
               >
-                <View style={[styles.checkbox, formData.activities.extraction && styles.checkedBox]} />
+                <View style={[styles.checkbox, formData.activities?.extraction && styles.checkedBox]} />
                 <Text style={styles.activityText}>{t.extraction}</Text>
                 <Text style={styles.equipmentText}>{t.extractionEquipment}</Text>
               </TouchableOpacity>
               
               <TouchableOpacity 
                 style={styles.activityRow}
-                onPress={() => updateNestedFormData('activities', 'disposition', !formData.activities.disposition)}
+                onPress={() => updateNestedFormData('activities', 'disposition', !formData.activities?.disposition)}
               >
-                <View style={[styles.checkbox, formData.activities.disposition && styles.checkedBox]} />
+                <View style={[styles.checkbox, formData.activities?.disposition && styles.checkedBox]} />
                 <Text style={styles.activityText}>{t.disposition}</Text>
                 <Text style={styles.equipmentText}>{t.dispositionEquipment}</Text>
               </TouchableOpacity>
               
               <TouchableOpacity 
                 style={styles.activityRow}
-                onPress={() => updateNestedFormData('activities', 'processing', !formData.activities.processing)}
+                onPress={() => updateNestedFormData('activities', 'processing', !formData.activities?.processing)}
               >
-                <View style={[styles.checkbox, formData.activities.processing && styles.checkedBox]} />
+                <View style={[styles.checkbox, formData.activities?.processing && styles.checkedBox]} />
                 <Text style={styles.activityText}>{t.processing}</Text>
                 <Text style={styles.equipmentText}>{t.processingEquipment}</Text>
               </TouchableOpacity>
@@ -1302,7 +2886,7 @@ export default function Reports() {
       )}
 
       {/* Non-Operating Status Activities */}
-      {formData.siteStatus === 'Non-operating' && (
+      {formData.siteStatus === 'non_operating' && (
         <View style={styles.nonOperatingSection}>
           <Text style={styles.operatingNote}>{t.nonOperatingNote}</Text>
           
@@ -1444,12 +3028,46 @@ export default function Reports() {
         />
         <View style={styles.photoSection}>
           <Text style={styles.photoLabel}>{t.attachPhotos}</Text>
-          <TouchableOpacity style={styles.uploadButton}>
-            <Text style={styles.uploadText}>{t.uploadGallery}</Text>
+          <TouchableOpacity 
+            style={[styles.uploadButton, isUploadingImages && styles.buttonDisabled]}
+            onPress={handleImageUpload}
+            disabled={isUploadingImages}
+          >
+            <Text style={styles.uploadText}>
+              {isUploadingImages ? 'Uploading...' : t.uploadGallery}
+            </Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.cameraButton}>
             <Text style={styles.cameraText}>{t.useCamera}</Text>
           </TouchableOpacity>
+          {uploadedImages.length > 0 && (
+            <View style={styles.imagePreviewContainer}>
+              <Text style={styles.imagePreviewTitle}>
+                {language === 'english' 
+                  ? `Uploaded Images (${uploadedImages.length})` 
+                  : `Mga Na-upload na Larawan (${uploadedImages.length})`
+                }
+              </Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.imageScrollView}>
+                {uploadedImages.map((image, index) => (
+                  <View key={index} style={styles.imagePreviewItem}>
+                    <Image source={{ uri: image.url }} style={styles.imagePreview} />
+                    <TouchableOpacity
+                      style={styles.removeImageButton}
+                      onPress={() => handleRemoveImage(index)}
+                    >
+                      <Ionicons name="close-circle" size={24} color="#ff4444" />
+                    </TouchableOpacity>
+                    {image.geotagged && (
+                      <View style={styles.geotaggedIndicator}>
+                        <Ionicons name="location" size={12} color="white" />
+                      </View>
+                    )}
+                  </View>
+                ))}
+              </ScrollView>
+            </View>
+          )}
         </View>
       </View>
 
@@ -1464,9 +3082,27 @@ export default function Reports() {
         </Text>
       </View>
 
+      {/* Save as Draft Button */}
+      <TouchableOpacity 
+        style={[styles.saveAsDraftButton, isSavingDraft && styles.submitButtonDisabled]} 
+        onPress={handleSaveAsDraft}
+        disabled={isSavingDraft || isSubmitting}
+      >
+        <Ionicons name="bookmark-outline" size={20} color={COLORS.textSecondary} />
+        <Text style={styles.saveAsDraftText}>
+          {isSavingDraft ? 'Saving...' : (isEditingMode ? 'Update Draft' : 'Save as Draft')}
+        </Text>
+      </TouchableOpacity>
+
       {/* Submit Button */}
-      <TouchableOpacity style={styles.submitToMGBButton} onPress={handleSubmitReport}>
-        <Text style={styles.submitToMGBText}>{t.submitButton}</Text>
+      <TouchableOpacity 
+        style={[styles.submitToMGBButton, isSubmitting && styles.submitButtonDisabled]} 
+        onPress={handleSubmitReport}
+        disabled={isSubmitting}
+      >
+        <Text style={styles.submitToMGBText}>
+          {isSubmitting ? 'Submitting...' : t.submitButton}
+        </Text>
       </TouchableOpacity>
     </ScrollView>
   ), [formData, updateFormData, updateNestedFormData, t, language]);
@@ -1498,8 +3134,19 @@ export default function Reports() {
             />
           </View>
         </View>
-        <TouchableOpacity style={styles.getLocationButton}>
-          <Text style={styles.getLocationText}>{tt.getCoordinates}</Text>
+        <TouchableOpacity 
+          style={[styles.getLocationButton, isLoadingProcessingLocation && styles.buttonDisabled]}
+          onPress={handleProcessingGetCurrentLocation}
+          disabled={isLoadingProcessingLocation}
+        >
+          {isLoadingProcessingLocation && (
+            <View style={styles.loadingContainer}>
+              <View style={styles.spinner} />
+            </View>
+          )}
+          <Text style={styles.getLocationText}>
+            {isLoadingProcessingLocation ? 'Getting Location...' : tt.getCoordinates}
+          </Text>
         </TouchableOpacity>
       </View>
 
@@ -1536,7 +3183,7 @@ export default function Reports() {
             />
           </View>
         </View>
-        <TouchableOpacity style={styles.usePhoneButton}>
+        <TouchableOpacity style={styles.usePhoneButton} onPress={handleTransportationUsePhoneDateTime}>
           <Text style={styles.usePhoneText}>{tt.usePhoneDateTime}</Text>
         </TouchableOpacity>
       </View>
@@ -1725,12 +3372,46 @@ export default function Reports() {
         />
         <View style={styles.photoSection}>
           <Text style={styles.photoLabel}>{tt.attachPhotos}</Text>
-          <TouchableOpacity style={styles.uploadButton}>
-            <Text style={styles.uploadText}>{tt.uploadGallery}</Text>
+          <TouchableOpacity 
+            style={[styles.uploadButton, isUploadingImages && styles.buttonDisabled]}
+            onPress={handleImageUpload}
+            disabled={isUploadingImages}
+          >
+            <Text style={styles.uploadText}>
+              {isUploadingImages ? 'Uploading...' : tt.uploadGallery}
+            </Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.cameraButton}>
             <Text style={styles.cameraText}>{tt.useCamera}</Text>
           </TouchableOpacity>
+          {uploadedImages.length > 0 && (
+            <View style={styles.imagePreviewContainer}>
+              <Text style={styles.imagePreviewTitle}>
+                {language === 'english' 
+                  ? `Uploaded Images (${uploadedImages.length})` 
+                  : `Mga Na-upload na Larawan (${uploadedImages.length})`
+                }
+              </Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.imageScrollView}>
+                {uploadedImages.map((image, index) => (
+                  <View key={index} style={styles.imagePreviewItem}>
+                    <Image source={{ uri: image.url }} style={styles.imagePreview} />
+                    <TouchableOpacity
+                      style={styles.removeImageButton}
+                      onPress={() => handleRemoveImage(index)}
+                    >
+                      <Ionicons name="close-circle" size={24} color="#ff4444" />
+                    </TouchableOpacity>
+                    {image.geotagged && (
+                      <View style={styles.geotaggedIndicator}>
+                        <Ionicons name="location" size={12} color="white" />
+                      </View>
+                    )}
+                  </View>
+                ))}
+              </ScrollView>
+            </View>
+          )}
         </View>
       </View>
 
@@ -1745,9 +3426,27 @@ export default function Reports() {
         </Text>
       </View>
 
+      {/* Save as Draft Button */}
+      <TouchableOpacity 
+        style={[styles.saveAsDraftButton, isSavingDraft && styles.submitButtonDisabled]} 
+        onPress={handleSaveAsDraft}
+        disabled={isSavingDraft || isSubmitting}
+      >
+        <Ionicons name="bookmark-outline" size={20} color={COLORS.textSecondary} />
+        <Text style={styles.saveAsDraftText}>
+          {isSavingDraft ? 'Saving...' : (isEditingMode ? 'Update Draft' : 'Save as Draft')}
+        </Text>
+      </TouchableOpacity>
+
       {/* Submit Button */}
-      <TouchableOpacity style={styles.submitToMGBButton} onPress={handleSubmitReport}>
-        <Text style={styles.submitToMGBText}>{tt.submitButton}</Text>
+      <TouchableOpacity 
+        style={[styles.submitToMGBButton, isSubmitting && styles.submitButtonDisabled]} 
+        onPress={handleSubmitReport}
+        disabled={isSubmitting}
+      >
+        <Text style={styles.submitToMGBText}>
+          {isSubmitting ? 'Submitting...' : tt.submitButton}
+        </Text>
       </TouchableOpacity>
     </ScrollView>
   ), [transportFormData, updateTransportFormData, tt, language]);
@@ -1779,8 +3478,19 @@ export default function Reports() {
             />
           </View>
         </View>
-        <TouchableOpacity style={styles.getLocationButton}>
-          <Text style={styles.getLocationText}>{tp.getCoordinates}</Text>
+        <TouchableOpacity 
+          style={[styles.getLocationButton, isLoadingTradingLocation && styles.buttonDisabled]}
+          onPress={handleTradingGetCurrentLocation}
+          disabled={isLoadingTradingLocation}
+        >
+          {isLoadingTradingLocation && (
+            <View style={styles.loadingContainer}>
+              <View style={styles.spinner} />
+            </View>
+          )}
+          <Text style={styles.getLocationText}>
+            {isLoadingTradingLocation ? 'Getting Location...' : tp.getCoordinates}
+          </Text>
         </TouchableOpacity>
       </View>
 
@@ -1817,7 +3527,7 @@ export default function Reports() {
             />
           </View>
         </View>
-        <TouchableOpacity style={styles.usePhoneButton}>
+        <TouchableOpacity style={styles.usePhoneButton} onPress={handleProcessingUsePhoneDateTime}>
           <Text style={styles.usePhoneText}>{tp.usePhoneDateTime}</Text>
         </TouchableOpacity>
       </View>
@@ -1869,18 +3579,18 @@ export default function Reports() {
                 'Site Status',
                 'Select site status',
                 [
-                  { text: tp.operating, onPress: () => updateProcessingFormData('siteStatus', 'Operating') },
-                  { text: tp.nonOperating, onPress: () => updateProcessingFormData('siteStatus', 'Non-operating') },
-                  { text: tp.underConstruction, onPress: () => updateProcessingFormData('siteStatus', 'Under construction') },
+                  { text: tp.operating, onPress: () => updateProcessingFormData('siteStatus', 'operating') },
+                  { text: tp.nonOperating, onPress: () => updateProcessingFormData('siteStatus', 'non_operating') },
+                  { text: tp.underConstruction, onPress: () => updateProcessingFormData('siteStatus', 'under_construction') },
                   { text: 'Cancel', style: 'cancel' }
                 ]
               );
             }}
           >
             <Text style={styles.dropdownText}>
-              {processingFormData.siteStatus === 'Operating' ? tp.operating : 
-               processingFormData.siteStatus === 'Non-operating' ? tp.nonOperating : 
-               processingFormData.siteStatus === 'Under construction' ? tp.underConstruction : tp.operating}
+              {processingFormData.siteStatus === 'operating' ? tp.operating : 
+               processingFormData.siteStatus === 'non_operating' ? tp.nonOperating : 
+               processingFormData.siteStatus === 'under_construction' ? tp.underConstruction : tp.operating}
             </Text>
             <Ionicons name="chevron-down" size={20} color={COLORS.textSecondary} />
           </TouchableOpacity>
@@ -1984,12 +3694,46 @@ export default function Reports() {
         />
         <View style={styles.photoSection}>
           <Text style={styles.photoLabel}>{tp.attachPhotos}</Text>
-          <TouchableOpacity style={styles.uploadButton}>
-            <Text style={styles.uploadText}>{tp.uploadGallery}</Text>
+          <TouchableOpacity 
+            style={[styles.uploadButton, isUploadingImages && styles.buttonDisabled]}
+            onPress={handleImageUpload}
+            disabled={isUploadingImages}
+          >
+            <Text style={styles.uploadText}>
+              {isUploadingImages ? 'Uploading...' : tp.uploadGallery}
+            </Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.cameraButton}>
             <Text style={styles.cameraText}>{tp.useCamera}</Text>
           </TouchableOpacity>
+          {uploadedImages.length > 0 && (
+            <View style={styles.imagePreviewContainer}>
+              <Text style={styles.imagePreviewTitle}>
+                {language === 'english' 
+                  ? `Uploaded Images (${uploadedImages.length})` 
+                  : `Mga Na-upload na Larawan (${uploadedImages.length})`
+                }
+              </Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.imageScrollView}>
+                {uploadedImages.map((image, index) => (
+                  <View key={index} style={styles.imagePreviewItem}>
+                    <Image source={{ uri: image.url }} style={styles.imagePreview} />
+                    <TouchableOpacity
+                      style={styles.removeImageButton}
+                      onPress={() => handleRemoveImage(index)}
+                    >
+                      <Ionicons name="close-circle" size={24} color="#ff4444" />
+                    </TouchableOpacity>
+                    {image.geotagged && (
+                      <View style={styles.geotaggedIndicator}>
+                        <Ionicons name="location" size={12} color="white" />
+                      </View>
+                    )}
+                  </View>
+                ))}
+              </ScrollView>
+            </View>
+          )}
         </View>
       </View>
 
@@ -2004,9 +3748,27 @@ export default function Reports() {
         </Text>
       </View>
 
+      {/* Save as Draft Button */}
+      <TouchableOpacity 
+        style={[styles.saveAsDraftButton, isSavingDraft && styles.submitButtonDisabled]} 
+        onPress={handleSaveAsDraft}
+        disabled={isSavingDraft || isSubmitting}
+      >
+        <Ionicons name="bookmark-outline" size={20} color={COLORS.textSecondary} />
+        <Text style={styles.saveAsDraftText}>
+          {isSavingDraft ? 'Saving...' : (isEditingMode ? 'Update Draft' : 'Save as Draft')}
+        </Text>
+      </TouchableOpacity>
+
       {/* Submit Button */}
-      <TouchableOpacity style={styles.submitToMGBButton} onPress={handleSubmitReport}>
-        <Text style={styles.submitToMGBText}>{tp.submitButton}</Text>
+      <TouchableOpacity 
+        style={[styles.submitToMGBButton, isSubmitting && styles.submitButtonDisabled]} 
+        onPress={handleSubmitReport}
+        disabled={isSubmitting}
+      >
+        <Text style={styles.submitToMGBText}>
+          {isSubmitting ? 'Submitting...' : tp.submitButton}
+        </Text>
       </TouchableOpacity>
     </ScrollView>
   ), [processingFormData, updateProcessingFormData, tp, language]);
@@ -2038,8 +3800,19 @@ export default function Reports() {
             />
           </View>
         </View>
-        <TouchableOpacity style={styles.getLocationButton}>
-          <Text style={styles.getLocationText}>{td.getCoordinates}</Text>
+        <TouchableOpacity 
+          style={[styles.getLocationButton, isLoadingLocation && styles.buttonDisabled]}
+          onPress={handleGetCurrentLocation}
+          disabled={isLoadingLocation}
+        >
+          {isLoadingLocation && (
+            <View style={styles.loadingContainer}>
+              <View style={styles.spinner} />
+            </View>
+          )}
+          <Text style={styles.getLocationText}>
+            {isLoadingLocation ? 'Getting Location...' : td.getCoordinates}
+          </Text>
         </TouchableOpacity>
       </View>
 
@@ -2076,7 +3849,7 @@ export default function Reports() {
             />
           </View>
         </View>
-        <TouchableOpacity style={styles.usePhoneButton}>
+        <TouchableOpacity style={styles.usePhoneButton} onPress={handleTradingUsePhoneDateTime}>
           <Text style={styles.usePhoneText}>{td.usePhoneDateTime}</Text>
         </TouchableOpacity>
       </View>
@@ -2239,12 +4012,46 @@ export default function Reports() {
         />
         <View style={styles.photoSection}>
           <Text style={styles.photoLabel}>{td.attachPhotos}</Text>
-          <TouchableOpacity style={styles.uploadButton}>
-            <Text style={styles.uploadText}>{td.uploadGallery}</Text>
+          <TouchableOpacity 
+            style={[styles.uploadButton, isUploadingImages && styles.buttonDisabled]}
+            onPress={handleImageUpload}
+            disabled={isUploadingImages}
+          >
+            <Text style={styles.uploadText}>
+              {isUploadingImages ? 'Uploading...' : td.uploadGallery}
+            </Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.cameraButton}>
             <Text style={styles.cameraText}>{td.useCamera}</Text>
           </TouchableOpacity>
+          {uploadedImages.length > 0 && (
+            <View style={styles.imagePreviewContainer}>
+              <Text style={styles.imagePreviewTitle}>
+                {language === 'english' 
+                  ? `Uploaded Images (${uploadedImages.length})` 
+                  : `Mga Na-upload na Larawan (${uploadedImages.length})`
+                }
+              </Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.imageScrollView}>
+                {uploadedImages.map((image, index) => (
+                  <View key={index} style={styles.imagePreviewItem}>
+                    <Image source={{ uri: image.url }} style={styles.imagePreview} />
+                    <TouchableOpacity
+                      style={styles.removeImageButton}
+                      onPress={() => handleRemoveImage(index)}
+                    >
+                      <Ionicons name="close-circle" size={24} color="#ff4444" />
+                    </TouchableOpacity>
+                    {image.geotagged && (
+                      <View style={styles.geotaggedIndicator}>
+                        <Ionicons name="location" size={12} color="white" />
+                      </View>
+                    )}
+                  </View>
+                ))}
+              </ScrollView>
+            </View>
+          )}
         </View>
       </View>
 
@@ -2259,9 +4066,27 @@ export default function Reports() {
         </Text>
       </View>
 
+      {/* Save as Draft Button */}
+      <TouchableOpacity 
+        style={[styles.saveAsDraftButton, isSavingDraft && styles.submitButtonDisabled]} 
+        onPress={handleSaveAsDraft}
+        disabled={isSavingDraft || isSubmitting}
+      >
+        <Ionicons name="bookmark-outline" size={20} color={COLORS.textSecondary} />
+        <Text style={styles.saveAsDraftText}>
+          {isSavingDraft ? 'Saving...' : (isEditingMode ? 'Update Draft' : 'Save as Draft')}
+        </Text>
+      </TouchableOpacity>
+
       {/* Submit Button */}
-      <TouchableOpacity style={styles.submitToMGBButton} onPress={handleSubmitReport}>
-        <Text style={styles.submitToMGBText}>{td.submitButton}</Text>
+      <TouchableOpacity 
+        style={[styles.submitToMGBButton, isSubmitting && styles.submitButtonDisabled]} 
+        onPress={handleSubmitReport}
+        disabled={isSubmitting}
+      >
+        <Text style={styles.submitToMGBText}>
+          {isSubmitting ? 'Submitting...' : td.submitButton}
+        </Text>
       </TouchableOpacity>
     </ScrollView>
   ), [tradingFormData, updateTradingFormData, td, language]);
@@ -2293,8 +4118,19 @@ export default function Reports() {
             />
           </View>
         </View>
-        <TouchableOpacity style={styles.getLocationButton}>
-          <Text style={styles.getLocationText}>{te.getCoordinates}</Text>
+        <TouchableOpacity 
+          style={[styles.getLocationButton, isLoadingExplorationLocation && styles.buttonDisabled]}
+          onPress={handleExplorationGetCurrentLocation}
+          disabled={isLoadingExplorationLocation}
+        >
+          {isLoadingExplorationLocation && (
+            <View style={styles.loadingContainer}>
+              <View style={styles.spinner} />
+            </View>
+          )}
+          <Text style={styles.getLocationText}>
+            {isLoadingExplorationLocation ? 'Getting Location...' : te.getCoordinates}
+          </Text>
         </TouchableOpacity>
       </View>
 
@@ -2331,7 +4167,7 @@ export default function Reports() {
             />
           </View>
         </View>
-        <TouchableOpacity style={styles.usePhoneButton}>
+        <TouchableOpacity style={styles.usePhoneButton} onPress={handleExplorationUsePhoneDateTime}>
           <Text style={styles.usePhoneText}>{te.usePhoneDateTime}</Text>
         </TouchableOpacity>
       </View>
@@ -2377,48 +4213,48 @@ export default function Reports() {
         <View style={styles.checkboxContainer}>
           <TouchableOpacity 
             style={styles.checkboxRow}
-            onPress={() => updateExplorationActivityData('drilling', !explorationFormData.activities.drilling)}
+            onPress={() => updateExplorationActivityData('drilling', !explorationFormData.activities?.drilling)}
           >
-            <View style={[styles.checkbox, explorationFormData.activities.drilling && styles.checkedBox]} />
+            <View style={[styles.checkbox, explorationFormData.activities?.drilling && styles.checkedBox]} />
             <Text style={styles.checkboxText}>{te.drilling}</Text>
           </TouchableOpacity>
           <TouchableOpacity 
             style={styles.checkboxRow}
-            onPress={() => updateExplorationActivityData('testPitting', !explorationFormData.activities.testPitting)}
+            onPress={() => updateExplorationActivityData('testPitting', !explorationFormData.activities?.testPitting)}
           >
-            <View style={[styles.checkbox, explorationFormData.activities.testPitting && styles.checkedBox]} />
+            <View style={[styles.checkbox, explorationFormData.activities?.testPitting && styles.checkedBox]} />
             <Text style={styles.checkboxText}>{te.testPitting}</Text>
           </TouchableOpacity>
           <TouchableOpacity 
             style={styles.checkboxRow}
-            onPress={() => updateExplorationActivityData('trenching', !explorationFormData.activities.trenching)}
+            onPress={() => updateExplorationActivityData('trenching', !explorationFormData.activities?.trenching)}
           >
-            <View style={[styles.checkbox, explorationFormData.activities.trenching && styles.checkedBox]} />
+            <View style={[styles.checkbox, explorationFormData.activities?.trenching && styles.checkedBox]} />
             <Text style={styles.checkboxText}>{te.trenching}</Text>
           </TouchableOpacity>
           <TouchableOpacity 
             style={styles.checkboxRow}
-            onPress={() => updateExplorationActivityData('shaftSinking', !explorationFormData.activities.shaftSinking)}
+            onPress={() => updateExplorationActivityData('shaftSinking', !explorationFormData.activities?.shaftSinking)}
           >
-            <View style={[styles.checkbox, explorationFormData.activities.shaftSinking && styles.checkedBox]} />
+            <View style={[styles.checkbox, explorationFormData.activities?.shaftSinking && styles.checkedBox]} />
             <Text style={styles.checkboxText}>{te.shaftSinking}</Text>
           </TouchableOpacity>
           <TouchableOpacity 
             style={styles.checkboxRow}
-            onPress={() => updateExplorationActivityData('tunneling', !explorationFormData.activities.tunneling)}
+            onPress={() => updateExplorationActivityData('tunneling', !explorationFormData.activities?.tunneling)}
           >
-            <View style={[styles.checkbox, explorationFormData.activities.tunneling && styles.checkedBox]} />
+            <View style={[styles.checkbox, explorationFormData.activities?.tunneling && styles.checkedBox]} />
             <Text style={styles.checkboxText}>{te.tunneling}</Text>
           </TouchableOpacity>
           <TouchableOpacity 
             style={styles.checkboxRow}
-            onPress={() => updateExplorationActivityData('others', !explorationFormData.activities.others)}
+            onPress={() => updateExplorationActivityData('others', !explorationFormData.activities?.others)}
           >
-            <View style={[styles.checkbox, explorationFormData.activities.others && styles.checkedBox]} />
+            <View style={[styles.checkbox, explorationFormData.activities?.others && styles.checkedBox]} />
             <Text style={styles.checkboxText}>{te.others}</Text>
           </TouchableOpacity>
         </View>
-        {explorationFormData.activities.others && (
+        {explorationFormData.activities?.others && (
           <TextInput 
             style={styles.textInput}
             value={explorationFormData.othersActivity}
@@ -2469,12 +4305,46 @@ export default function Reports() {
         />
         <View style={styles.photoSection}>
           <Text style={styles.photoLabel}>{te.attachPhotos}</Text>
-          <TouchableOpacity style={styles.uploadButton}>
-            <Text style={styles.uploadText}>{te.uploadGallery}</Text>
+          <TouchableOpacity 
+            style={[styles.uploadButton, isUploadingImages && styles.buttonDisabled]}
+            onPress={handleImageUpload}
+            disabled={isUploadingImages}
+          >
+            <Text style={styles.uploadText}>
+              {isUploadingImages ? 'Uploading...' : te.uploadGallery}
+            </Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.cameraButton}>
             <Text style={styles.cameraText}>{te.useCamera}</Text>
           </TouchableOpacity>
+          {uploadedImages.length > 0 && (
+            <View style={styles.imagePreviewContainer}>
+              <Text style={styles.imagePreviewTitle}>
+                {language === 'english' 
+                  ? `Uploaded Images (${uploadedImages.length})` 
+                  : `Mga Na-upload na Larawan (${uploadedImages.length})`
+                }
+              </Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.imageScrollView}>
+                {uploadedImages.map((image, index) => (
+                  <View key={index} style={styles.imagePreviewItem}>
+                    <Image source={{ uri: image.url }} style={styles.imagePreview} />
+                    <TouchableOpacity
+                      style={styles.removeImageButton}
+                      onPress={() => handleRemoveImage(index)}
+                    >
+                      <Ionicons name="close-circle" size={24} color="#ff4444" />
+                    </TouchableOpacity>
+                    {image.geotagged && (
+                      <View style={styles.geotaggedIndicator}>
+                        <Ionicons name="location" size={12} color="white" />
+                      </View>
+                    )}
+                  </View>
+                ))}
+              </ScrollView>
+            </View>
+          )}
         </View>
       </View>
 
@@ -2489,9 +4359,27 @@ export default function Reports() {
         </Text>
       </View>
 
+      {/* Save as Draft Button */}
+      <TouchableOpacity 
+        style={[styles.saveAsDraftButton, isSavingDraft && styles.submitButtonDisabled]} 
+        onPress={handleSaveAsDraft}
+        disabled={isSavingDraft || isSubmitting}
+      >
+        <Ionicons name="bookmark-outline" size={20} color={COLORS.textSecondary} />
+        <Text style={styles.saveAsDraftText}>
+          {isSavingDraft ? 'Saving...' : (isEditingMode ? 'Update Draft' : 'Save as Draft')}
+        </Text>
+      </TouchableOpacity>
+
       {/* Submit Button */}
-      <TouchableOpacity style={styles.submitToMGBButton} onPress={handleSubmitReport}>
-        <Text style={styles.submitToMGBText}>{te.submitButton}</Text>
+      <TouchableOpacity 
+        style={[styles.submitToMGBButton, isSubmitting && styles.submitButtonDisabled]} 
+        onPress={handleSubmitReport}
+        disabled={isSubmitting}
+      >
+        <Text style={styles.submitToMGBText}>
+          {isSubmitting ? 'Submitting...' : te.submitButton}
+        </Text>
       </TouchableOpacity>
     </ScrollView>
   ), [explorationFormData, updateExplorationFormData, updateExplorationActivityData, te, language]);
@@ -2523,8 +4411,19 @@ export default function Reports() {
             />
           </View>
         </View>
-        <TouchableOpacity style={styles.getLocationButton}>
-          <Text style={styles.getLocationText}>{ts.getCoordinates}</Text>
+        <TouchableOpacity 
+          style={[styles.getLocationButton, isLoadingSmallScaleMiningLocation && styles.buttonDisabled]}
+          onPress={handleSmallScaleMiningGetCurrentLocation}
+          disabled={isLoadingSmallScaleMiningLocation}
+        >
+          {isLoadingSmallScaleMiningLocation && (
+            <View style={styles.loadingContainer}>
+              <View style={styles.spinner} />
+            </View>
+          )}
+          <Text style={styles.getLocationText}>
+            {isLoadingSmallScaleMiningLocation ? 'Getting Location...' : ts.getCoordinates}
+          </Text>
         </TouchableOpacity>
       </View>
 
@@ -2561,7 +4460,7 @@ export default function Reports() {
             />
           </View>
         </View>
-        <TouchableOpacity style={styles.usePhoneButton}>
+        <TouchableOpacity style={styles.usePhoneButton} onPress={handleSmallScaleMiningUsePhoneDateTime}>
           <Text style={styles.usePhoneText}>{ts.usePhoneDateTime}</Text>
         </TouchableOpacity>
       </View>
@@ -2648,92 +4547,92 @@ export default function Reports() {
             <View style={styles.checkboxContainer}>
               <TouchableOpacity 
                 style={styles.checkboxRow}
-                onPress={() => updateSmallScaleMiningActivityData('extraction', !smallScaleMiningFormData.activities.extraction)}
+                onPress={() => updateSmallScaleMiningActivityData('extraction', !smallScaleMiningFormData.activities?.extraction)}
               >
-                <View style={[styles.checkbox, smallScaleMiningFormData.activities.extraction && styles.checkedBox]} />
+                <View style={[styles.checkbox, smallScaleMiningFormData.activities?.extraction && styles.checkedBox]} />
                 <Text style={styles.checkboxText}>{ts.extraction}</Text>
               </TouchableOpacity>
-              {smallScaleMiningFormData.activities.extraction && (
+              {smallScaleMiningFormData.activities?.extraction && (
                 <TextInput 
                   style={styles.equipmentInput}
                   placeholder={ts.extractionEquipment}
-                  value={smallScaleMiningFormData.equipmentUsed.extraction}
+                  value={smallScaleMiningFormData.equipmentUsed?.extraction}
                   onChangeText={(text) => updateSmallScaleMiningEquipmentData('extraction', text)}
                 />
               )}
               
               <TouchableOpacity 
                 style={styles.checkboxRow}
-                onPress={() => updateSmallScaleMiningActivityData('disposition', !smallScaleMiningFormData.activities.disposition)}
+                onPress={() => updateSmallScaleMiningActivityData('disposition', !smallScaleMiningFormData.activities?.disposition)}
               >
-                <View style={[styles.checkbox, smallScaleMiningFormData.activities.disposition && styles.checkedBox]} />
+                <View style={[styles.checkbox, smallScaleMiningFormData.activities?.disposition && styles.checkedBox]} />
                 <Text style={styles.checkboxText}>{ts.disposition}</Text>
               </TouchableOpacity>
-              {smallScaleMiningFormData.activities.disposition && (
+              {smallScaleMiningFormData.activities?.disposition && (
                 <TextInput 
                   style={styles.equipmentInput}
                   placeholder={ts.dispositionEquipment}
-                  value={smallScaleMiningFormData.equipmentUsed.disposition}
+                  value={smallScaleMiningFormData.equipmentUsed?.disposition}
                   onChangeText={(text) => updateSmallScaleMiningEquipmentData('disposition', text)}
                 />
               )}
               
               <TouchableOpacity 
                 style={styles.checkboxRow}
-                onPress={() => updateSmallScaleMiningActivityData('mineralProcessing', !smallScaleMiningFormData.activities.mineralProcessing)}
+                onPress={() => updateSmallScaleMiningActivityData('mineralProcessing', !smallScaleMiningFormData.activities?.mineralProcessing)}
               >
-                <View style={[styles.checkbox, smallScaleMiningFormData.activities.mineralProcessing && styles.checkedBox]} />
+                <View style={[styles.checkbox, smallScaleMiningFormData.activities?.mineralProcessing && styles.checkedBox]} />
                 <Text style={styles.checkboxText}>{ts.mineralProcessing}</Text>
               </TouchableOpacity>
-              {smallScaleMiningFormData.activities.mineralProcessing && (
+              {smallScaleMiningFormData.activities?.mineralProcessing && (
                 <TextInput 
                   style={styles.equipmentInput}
                   placeholder={ts.processingEquipment}
-                  value={smallScaleMiningFormData.equipmentUsed.mineralProcessing}
+                  value={smallScaleMiningFormData.equipmentUsed?.mineralProcessing}
                   onChangeText={(text) => updateSmallScaleMiningEquipmentData('mineralProcessing', text)}
                 />
               )}
               
               <TouchableOpacity 
                 style={styles.checkboxRow}
-                onPress={() => updateSmallScaleMiningActivityData('tunneling', !smallScaleMiningFormData.activities.tunneling)}
+                onPress={() => updateSmallScaleMiningActivityData('tunneling', !smallScaleMiningFormData.activities?.tunneling)}
               >
-                <View style={[styles.checkbox, smallScaleMiningFormData.activities.tunneling && styles.checkedBox]} />
+                <View style={[styles.checkbox, smallScaleMiningFormData.activities?.tunneling && styles.checkedBox]} />
                 <Text style={styles.checkboxText}>{ts.tunneling}</Text>
               </TouchableOpacity>
               
               <TouchableOpacity 
                 style={styles.checkboxRow}
-                onPress={() => updateSmallScaleMiningActivityData('shaftSinking', !smallScaleMiningFormData.activities.shaftSinking)}
+                onPress={() => updateSmallScaleMiningActivityData('shaftSinking', !smallScaleMiningFormData.activities?.shaftSinking)}
               >
-                <View style={[styles.checkbox, smallScaleMiningFormData.activities.shaftSinking && styles.checkedBox]} />
+                <View style={[styles.checkbox, smallScaleMiningFormData.activities?.shaftSinking && styles.checkedBox]} />
                 <Text style={styles.checkboxText}>{ts.shaftSinking}</Text>
               </TouchableOpacity>
               
               <TouchableOpacity 
                 style={styles.checkboxRow}
-                onPress={() => updateSmallScaleMiningActivityData('goldPanning', !smallScaleMiningFormData.activities.goldPanning)}
+                onPress={() => updateSmallScaleMiningActivityData('goldPanning', !smallScaleMiningFormData.activities?.goldPanning)}
               >
-                <View style={[styles.checkbox, smallScaleMiningFormData.activities.goldPanning && styles.checkedBox]} />
+                <View style={[styles.checkbox, smallScaleMiningFormData.activities?.goldPanning && styles.checkedBox]} />
                 <Text style={styles.checkboxText}>{ts.goldPanning}</Text>
               </TouchableOpacity>
               
               <TouchableOpacity 
                 style={styles.checkboxRow}
-                onPress={() => updateSmallScaleMiningActivityData('amalgamation', !smallScaleMiningFormData.activities.amalgamation)}
+                onPress={() => updateSmallScaleMiningActivityData('amalgamation', !smallScaleMiningFormData.activities?.amalgamation)}
               >
-                <View style={[styles.checkbox, smallScaleMiningFormData.activities.amalgamation && styles.checkedBox]} />
+                <View style={[styles.checkbox, smallScaleMiningFormData.activities?.amalgamation && styles.checkedBox]} />
                 <Text style={styles.checkboxText}>{ts.amalgamation}</Text>
               </TouchableOpacity>
               
               <TouchableOpacity 
                 style={styles.checkboxRow}
-                onPress={() => updateSmallScaleMiningActivityData('others', !smallScaleMiningFormData.activities.others)}
+                onPress={() => updateSmallScaleMiningActivityData('others', !smallScaleMiningFormData.activities?.others)}
               >
-                <View style={[styles.checkbox, smallScaleMiningFormData.activities.others && styles.checkedBox]} />
+                <View style={[styles.checkbox, smallScaleMiningFormData.activities?.others && styles.checkedBox]} />
                 <Text style={styles.checkboxText}>{ts.others}</Text>
               </TouchableOpacity>
-              {smallScaleMiningFormData.activities.others && (
+              {smallScaleMiningFormData.activities?.others && (
                 <TextInput 
                   style={styles.textInput}
                   value={smallScaleMiningFormData.othersActivity}
@@ -2940,12 +4839,46 @@ export default function Reports() {
         />
         <View style={styles.photoSection}>
           <Text style={styles.photoLabel}>{ts.attachPhotos}</Text>
-          <TouchableOpacity style={styles.uploadButton}>
-            <Text style={styles.uploadText}>{ts.uploadGallery}</Text>
+          <TouchableOpacity 
+            style={[styles.uploadButton, isUploadingImages && styles.buttonDisabled]}
+            onPress={handleImageUpload}
+            disabled={isUploadingImages}
+          >
+            <Text style={styles.uploadText}>
+              {isUploadingImages ? 'Uploading...' : ts.uploadGallery}
+            </Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.cameraButton}>
             <Text style={styles.cameraText}>{ts.useCamera}</Text>
           </TouchableOpacity>
+          {uploadedImages.length > 0 && (
+            <View style={styles.imagePreviewContainer}>
+              <Text style={styles.imagePreviewTitle}>
+                {language === 'english' 
+                  ? `Uploaded Images (${uploadedImages.length})` 
+                  : `Mga Na-upload na Larawan (${uploadedImages.length})`
+                }
+              </Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.imageScrollView}>
+                {uploadedImages.map((image, index) => (
+                  <View key={index} style={styles.imagePreviewItem}>
+                    <Image source={{ uri: image.url }} style={styles.imagePreview} />
+                    <TouchableOpacity
+                      style={styles.removeImageButton}
+                      onPress={() => handleRemoveImage(index)}
+                    >
+                      <Ionicons name="close-circle" size={24} color="#ff4444" />
+                    </TouchableOpacity>
+                    {image.geotagged && (
+                      <View style={styles.geotaggedIndicator}>
+                        <Ionicons name="location" size={12} color="white" />
+                      </View>
+                    )}
+                  </View>
+                ))}
+              </ScrollView>
+            </View>
+          )}
         </View>
       </View>
 
@@ -2960,9 +4893,27 @@ export default function Reports() {
         </Text>
       </View>
 
+      {/* Save as Draft Button */}
+      <TouchableOpacity 
+        style={[styles.saveAsDraftButton, isSavingDraft && styles.submitButtonDisabled]} 
+        onPress={handleSaveAsDraft}
+        disabled={isSavingDraft || isSubmitting}
+      >
+        <Ionicons name="bookmark-outline" size={20} color={COLORS.textSecondary} />
+        <Text style={styles.saveAsDraftText}>
+          {isSavingDraft ? 'Saving...' : (isEditingMode ? 'Update Draft' : 'Save as Draft')}
+        </Text>
+      </TouchableOpacity>
+
       {/* Submit Button */}
-      <TouchableOpacity style={styles.submitToMGBButton} onPress={handleSubmitReport}>
-        <Text style={styles.submitToMGBText}>{ts.submitButton}</Text>
+      <TouchableOpacity 
+        style={[styles.submitToMGBButton, isSubmitting && styles.submitButtonDisabled]} 
+        onPress={handleSubmitReport}
+        disabled={isSubmitting}
+      >
+        <Text style={styles.submitToMGBText}>
+          {isSubmitting ? 'Submitting...' : ts.submitButton}
+        </Text>
       </TouchableOpacity>
     </ScrollView>
   ), [smallScaleMiningFormData, updateSmallScaleMiningFormData, updateSmallScaleMiningActivityData, updateSmallScaleMiningEquipmentData, updateSmallScaleMiningObservationData, updateSmallScaleMiningInterviewData, ts, language]);
@@ -3000,6 +4951,125 @@ export default function Reports() {
     </Modal>
   ), [showChecklistModal, selectedCategory, language, IllegalMiningChecklist, IllegalTransportationChecklist, IllegalProcessingChecklist, IllegalTradingChecklist, IllegalExplorationChecklist, IllegalSmallScaleMiningChecklist]);
 
+  // Image Preview Modal Component
+  const ImagePreviewModal = () => {
+    if (!showImagePreview || currentImages.length === 0) return null;
+
+    const currentImage = currentImages[selectedImageIndex];
+
+    return (
+      <Modal visible={showImagePreview} transparent animationType="fade">
+        <View style={styles.imagePreviewOverlay}>
+          {/* Header */}
+          <View style={styles.imagePreviewHeader}>
+            <View style={styles.imageCounter}>
+              <Text style={styles.imageCounterText}>
+                {selectedImageIndex + 1} of {currentImages.length}
+              </Text>
+            </View>
+            <View style={styles.imagePreviewActions}>
+              <TouchableOpacity 
+                style={styles.imageActionButton}
+                onPress={() => setIsEditingImages(!isEditingImages)}
+              >
+                <Ionicons name={isEditingImages ? "checkmark" : "create"} size={24} color="white" />
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={styles.imageActionButton}
+                onPress={closeImagePreview}
+              >
+                <Ionicons name="close" size={24} color="white" />
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* Main Image */}
+          <View style={styles.imageContainer}>
+            <Image 
+              source={{ uri: currentImage.url || currentImage.uri || currentImage.preview }}
+              style={styles.fullScreenImage}
+              resizeMode="contain"
+              onError={(error) => {
+                console.log('Full screen image load error:', error.nativeEvent.error);
+                console.log('Image URI:', currentImage.url || currentImage.uri || currentImage.preview);
+              }}
+            />
+            
+            {/* Navigation Arrows */}
+            {currentImages.length > 1 && (
+              <>
+                {selectedImageIndex > 0 && (
+                  <TouchableOpacity 
+                    style={[styles.navButton, styles.prevButton]}
+                    onPress={() => setSelectedImageIndex(selectedImageIndex - 1)}
+                  >
+                    <Ionicons name="chevron-back" size={30} color="white" />
+                  </TouchableOpacity>
+                )}
+                {selectedImageIndex < currentImages.length - 1 && (
+                  <TouchableOpacity 
+                    style={[styles.navButton, styles.nextButton]}
+                    onPress={() => setSelectedImageIndex(selectedImageIndex + 1)}
+                  >
+                    <Ionicons name="chevron-forward" size={30} color="white" />
+                  </TouchableOpacity>
+                )}
+              </>
+            )}
+          </View>
+
+          {/* Bottom Actions (shown when editing) */}
+          {isEditingImages && (
+            <View style={styles.imageEditActions}>
+              <TouchableOpacity 
+                style={[styles.editActionButton, styles.deleteButton]}
+                onPress={() => handleDeleteImageFromPreview(selectedImageIndex)}
+              >
+                <Ionicons name="trash" size={20} color="white" />
+                <Text style={styles.editActionText}>Delete</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={[styles.editActionButton, styles.addButton]}
+                onPress={handleAddNewImages}
+                disabled={isUploadingNewImages}
+              >
+                <Ionicons name={isUploadingNewImages ? "hourglass" : "add"} size={20} color="white" />
+                <Text style={styles.editActionText}>
+                  {isUploadingNewImages ? "Adding..." : "Add New"}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {/* Thumbnail Strip */}
+          {currentImages.length > 1 && (
+            <View style={styles.thumbnailStrip}>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                {currentImages.map((image, index) => (
+                  <TouchableOpacity
+                    key={index}
+                    style={[
+                      styles.thumbnailStripItem,
+                      index === selectedImageIndex && styles.activeThumbnail
+                    ]}
+                    onPress={() => setSelectedImageIndex(index)}
+                  >
+                    <Image 
+                      source={{ uri: image.url || image.uri || image.preview }}
+                      style={styles.thumbnailStripImage}
+                      resizeMode="cover"
+                    />
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+          )}
+        </View>
+      </Modal>
+    );
+  };
+
   return (
     <View style={styles.container}>
       {/* Header */}
@@ -3008,31 +5078,103 @@ export default function Reports() {
         <Text style={styles.headerSubtitle}>Mining violations and incidents</Text>
       </View>
 
-      {/* Header Buttons */}
-      <View style={styles.headerButtons}>
+      {/* Tab Navigation */}
+      <View style={styles.tabContainer}>
         <TouchableOpacity
-          style={[styles.headerButton, showMyReports && styles.activeHeaderButton]}
-          onPress={() => setShowMyReports(!showMyReports)}
+          style={[styles.tab, activeTab === 'reports' && styles.activeTab]}
+          onPress={() => setActiveTab('reports')}
         >
-          <Text style={[styles.headerButtonText, showMyReports && styles.activeHeaderButtonText]}>My Reports</Text>
+          <Ionicons 
+            name={activeTab === 'reports' ? 'document-text' : 'document-text-outline'} 
+            size={20} 
+            color={activeTab === 'reports' ? COLORS.primary : COLORS.textSecondary} 
+          />
+          <Text style={[styles.tabText, activeTab === 'reports' && styles.activeTabText]}>My Reports</Text>
+          {reports.length > 0 && (
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>{reports.length}</Text>
+            </View>
+          )}
+        </TouchableOpacity>
+        
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'drafts' && styles.activeTab]}
+          onPress={() => setActiveTab('drafts')}
+        >
+          <Ionicons 
+            name={activeTab === 'drafts' ? 'create' : 'create-outline'} 
+            size={20} 
+            color={activeTab === 'drafts' ? COLORS.primary : COLORS.textSecondary} 
+          />
+          <Text style={[styles.tabText, activeTab === 'drafts' && styles.activeTabText]}>My Drafts</Text>
+          {drafts.length > 0 && (
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>{drafts.length}</Text>
+            </View>
+          )}
         </TouchableOpacity>
       </View>
 
+      {/* Search and Filter Bar */}
+      <View style={styles.searchContainer}>
+        <View style={styles.searchInputContainer}>
+          <Ionicons name="search" size={20} color={COLORS.textSecondary} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder={`Search ${activeTab === 'reports' ? 'reports' : 'drafts'}...`}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            placeholderTextColor={COLORS.textSecondary}
+          />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity onPress={() => setSearchQuery('')}>
+              <Ionicons name="close-circle" size={20} color={COLORS.textSecondary} />
+            </TouchableOpacity>
+          )}
+        </View>
+      </View>
+
       {/* Reports List */}
-      <FlatList
-        data={reports}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item, index }) => <ReportCard item={item} index={index} />}
-        contentContainerStyle={styles.listContainer}
-        showsVerticalScrollIndicator={false}
-        ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <Ionicons name="document-outline" size={60} color={COLORS.textSecondary} />
-            <Text style={styles.emptyText}>No reports yet</Text>
-            <Text style={styles.emptySubtext}>Create a new report using the categories below</Text>
-          </View>
-        }
-      />
+      {isLoading ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={COLORS.primary} />
+          <Text style={styles.loadingText}>Loading {activeTab}...</Text>
+        </View>
+      ) : (
+        <FlatList
+          data={getFilteredData()}
+          keyExtractor={(item) => item._id || item.reportId}
+          renderItem={({ item, index }) => <ReportCard item={item} index={index} />}
+          contentContainerStyle={styles.listContainer}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={isRefreshing}
+              onRefresh={refreshReports}
+              colors={[COLORS.primary]}
+              tintColor={COLORS.primary}
+            />
+          }
+          ListEmptyComponent={
+            <View style={styles.emptyContainer}>
+              <Ionicons 
+                name={activeTab === 'reports' ? 'document-outline' : 'create-outline'} 
+                size={60} 
+                color={COLORS.textSecondary} 
+              />
+              <Text style={styles.emptyText}>
+                {activeTab === 'reports' ? 'No reports yet' : 'No drafts yet'}
+              </Text>
+              <Text style={styles.emptySubtext}>
+                {activeTab === 'reports' 
+                  ? 'Submit your first report using the button below' 
+                  : 'Start creating a report to save as draft'
+                }
+              </Text>
+            </View>
+          }
+        />
+      )}
 
       {/* New Report Button */}
       <TouchableOpacity
@@ -3046,6 +5188,9 @@ export default function Reports() {
       {/* Modals */}
       <CategorySelectionModal />
       {ChecklistModal}
+      <ReportDetailModal />
+      <DraftDetailModal />
+      <ImagePreviewModal />
     </View>
   );
 }
@@ -3072,6 +5217,85 @@ const styles = StyleSheet.create({
   headerSubtitle: {
     fontSize: 14,
     color: COLORS.textSecondary,
+  },
+  // Tab Navigation Styles
+  tabContainer: {
+    flexDirection: 'row',
+    backgroundColor: COLORS.white,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  tab: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    marginHorizontal: 4,
+    gap: 8,
+  },
+  activeTab: {
+    backgroundColor: `${COLORS.primary}15`,
+  },
+  tabText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.textSecondary,
+  },
+  activeTabText: {
+    color: COLORS.primary,
+  },
+  badge: {
+    backgroundColor: COLORS.primary,
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 6,
+  },
+  badgeText: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: COLORS.white,
+  },
+  // Search and Filter Styles
+  searchContainer: {
+    backgroundColor: COLORS.white,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  searchInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.background,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    gap: 8,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 16,
+    color: COLORS.textPrimary,
+  },
+  // Loading Styles
+  loadingContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 40,
+  },
+  loadingText: {
+    fontSize: 16,
+    color: COLORS.textSecondary,
+    marginTop: 12,
   },
   headerButtons: {
     backgroundColor: COLORS.white,
@@ -3142,10 +5366,27 @@ const styles = StyleSheet.create({
   },
   cardInfo: {
     gap: 8,
+    marginBottom: 8,
+  },
+  cardFooter: {
+    alignItems: 'flex-end',
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+  },
+  draftActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  draftActionText: {
+    fontSize: 12,
+    color: COLORS.primary,
+    fontWeight: '500',
   },
   infoRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: 8,
   },
   infoText: {
@@ -3191,7 +5432,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: COLORS.primary,
     marginHorizontal: 16,
-    marginVertical: 16,
+    marginVertical: 6,
     paddingVertical: 16,
     borderRadius: 12,
     gap: 8,
@@ -3210,19 +5451,22 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: 60,
+    paddingVertical: 80,
+    paddingHorizontal: 20,
   },
   emptyText: {
     fontSize: 18,
     fontWeight: '600',
     color: COLORS.textSecondary,
     marginTop: 16,
+    textAlign: 'center',
   },
   emptySubtext: {
     fontSize: 14,
     color: COLORS.textSecondary,
     marginTop: 8,
     textAlign: 'center',
+    lineHeight: 20,
   },
   modalOverlay: {
     flex: 1,
@@ -3339,26 +5583,24 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   coordinateInput: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
+    flex: 1,
+    marginHorizontal: 4,
   },
   coordinateLabel: {
-    fontSize: 14,
+    fontSize: 12,
     color: COLORS.textPrimary,
-    width: 80,
+    marginBottom: 4,
     fontWeight: '600',
   },
   coordinateField: {
-    flex: 1,
     borderWidth: 1,
     borderColor: COLORS.border,
     borderRadius: 8,
     padding: 12,
-    fontSize: 16,
-    marginLeft: 8,
-    minHeight: 48,
+    fontSize: 14,
+    minHeight: 45,
     backgroundColor: COLORS.white,
+    color: COLORS.textPrimary,
   },
   getLocationButton: {
     backgroundColor: '#E3F2FD',
@@ -3391,21 +5633,6 @@ const styles = StyleSheet.create({
   },
   usePhoneButton: {
     backgroundColor: '#E3F2FD',
-    padding: 8,
-    borderRadius: 4,
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  usePhoneText: {
-    fontSize: 10,
-    color: '#2196F3',
-    fontWeight: '600',
-    textAlign: 'center',
-  },
-  checkboxContainer: {
-    gap: 8,
-  },
-  checkboxRow: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: COLORS.background,
@@ -3584,23 +5811,177 @@ const styles = StyleSheet.create({
     color: COLORS.textPrimary,
     marginBottom: 8,
   },
+  // GPS and Image Upload Styles
+  gpsContainer: {
+    backgroundColor: COLORS.white,
+    padding: 16,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  gpsRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 12,
+  },
+  gpsField: {
+    flex: 1,
+  },
+  gpsButton: {
+    backgroundColor: COLORS.primary,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 12,
+    borderRadius: 8,
+    gap: 8,
+  },
+  gpsButtonText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  buttonDisabled: {
+    backgroundColor: COLORS.textSecondary,
+    opacity: 0.6,
+  },
+  imageUploadButton: {
+    backgroundColor: COLORS.primary,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 16,
+    borderRadius: 8,
+    gap: 8,
+    marginBottom: 16,
+  },
+  imageUploadButtonText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  imagePreviewContainer: {
+    backgroundColor: COLORS.white,
+    padding: 16,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  imagePreviewTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.textPrimary,
+    marginBottom: 12,
+  },
+  imageScrollView: {
+    flexDirection: 'row',
+  },
+  imagePreviewItem: {
+    position: 'relative',
+    marginRight: 12,
+  },
+  imagePreviewTouchable: {
+    position: 'relative',
+    borderRadius: 8,
+    overflow: 'hidden',
+  },
+  imagePreview: {
+    width: 80,
+    height: 80,
+    borderRadius: 8,
+    backgroundColor: COLORS.background,
+  },
+  imagePreviewOverlayIcon: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 8,
+  },
+  removeImageButton: {
+    position: 'absolute',
+    top: -8,
+    right: -8,
+    backgroundColor: 'white',
+    borderRadius: 12,
+    zIndex: 10,
+  },
+  geotaggedIndicator: {
+    position: 'absolute',
+    bottom: 4,
+    right: 4,
+    backgroundColor: COLORS.primary,
+    borderRadius: 8,
+    padding: 2,
+    zIndex: 5,
+  },
+  // Loading Animation Styles
+  loadingContainer: {
+    position: 'absolute',
+    left: 8,
+    top: '50%',
+    transform: [{ translateY: -6 }],
+  },
+  spinner: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: '#2196F3',
+    borderTopColor: 'transparent',
+    animation: 'spin 1s linear infinite',
+  },
   certificationText: {
     fontSize: 11,
     color: COLORS.textSecondary,
     lineHeight: 16,
     marginBottom: 8,
   },
+  saveAsDraftButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.white,
+    borderWidth: 2,
+    borderColor: COLORS.border,
+    padding: 16,
+    borderRadius: 12,
+    marginTop: 20,
+    marginBottom: 8,
+    gap: 8,
+    elevation: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+  },
+  saveAsDraftText: {
+    fontSize: 16,
+    color: COLORS.textSecondary,
+    fontWeight: '600',
+  },
   submitToMGBButton: {
     backgroundColor: COLORS.primary,
-    padding: 16,
-    borderRadius: 8,
+    padding: 18,
+    borderRadius: 12,
     alignItems: 'center',
+    marginTop: 12,
     marginBottom: 20,
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
   },
   submitToMGBText: {
     fontSize: 16,
     color: COLORS.white,
     fontWeight: 'bold',
+    letterSpacing: 0.5,
   },
   placeholderText: {
     fontSize: 16,
@@ -3615,15 +5996,19 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: COLORS.textPrimary,
-    marginBottom: 8,
-  },
-  textInput: {
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
-    color: COLORS.textPrimary,
+    coordinateInput: {
+      flex: 1,
+    },
+    coordinateField: {
+      borderWidth: 1,
+      borderColor: COLORS.border,
+      borderRadius: 4,
+      padding: 12,
+      fontSize: 14,
+      color: COLORS.textPrimary,
+      backgroundColor: COLORS.white,
+      minHeight: 45,
+    },
     backgroundColor: COLORS.inputBackground,
   },
   textArea: {
@@ -3723,5 +6108,206 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
     marginBottom: 4,
     fontStyle: 'italic',
+  },
+  // Detail Modal Styles
+  detailModalContent: {
+    backgroundColor: COLORS.white,
+    borderRadius: 20,
+    margin: 20,
+    maxHeight: '80%',
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+  },
+  detailScrollView: {
+    maxHeight: 400,
+    paddingHorizontal: 20,
+  },
+  detailSection: {
+    marginBottom: 16,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  detailLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.textSecondary,
+    marginBottom: 4,
+  },
+  detailValue: {
+    fontSize: 16,
+    color: COLORS.textPrimary,
+    lineHeight: 22,
+  },
+  editDraftButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.primary,
+    padding: 16,
+    borderRadius: 12,
+    gap: 8,
+  },
+  editDraftButtonText: {
+    fontSize: 16,
+    color: COLORS.white,
+    fontWeight: '600',
+  },
+  
+  // Image Preview Styles
+  attachmentScrollView: {
+    marginTop: 8,
+  },
+  attachmentThumbnail: {
+    width: 80,
+    height: 80,
+    marginRight: 8,
+    borderRadius: 8,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  thumbnailImage: {
+    width: '100%',
+    height: '100%',
+  },
+  thumbnailOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  viewAllImagesButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    backgroundColor: COLORS.background,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: COLORS.primary,
+  },
+  viewAllImagesText: {
+    marginLeft: 6,
+    fontSize: 14,
+    color: COLORS.primary,
+    fontWeight: '500',
+  },
+  
+  // Full Screen Image Preview Styles
+  imagePreviewOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.95)',
+  },
+  imagePreviewHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingTop: 50,
+    paddingBottom: 20,
+  },
+  imageCounter: {
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 15,
+  },
+  imageCounterText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  imagePreviewActions: {
+    flexDirection: 'row',
+    gap: 15,
+  },
+  imageActionButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  imageContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'relative',
+  },
+  fullScreenImage: {
+    width: '100%',
+    height: '100%',
+  },
+  navButton: {
+    position: 'absolute',
+    top: '50%',
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: -25,
+  },
+  prevButton: {
+    left: 20,
+  },
+  nextButton: {
+    right: 20,
+  },
+  imageEditActions: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 20,
+    gap: 20,
+  },
+  editActionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 25,
+    gap: 8,
+  },
+  deleteButton: {
+    backgroundColor: '#FF4444',
+  },
+  addButton: {
+    backgroundColor: COLORS.primary,
+  },
+  editActionText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  thumbnailStrip: {
+    paddingHorizontal: 20,
+    paddingBottom: 30,
+  },
+  thumbnailStripItem: {
+    width: 60,
+    height: 60,
+    marginRight: 10,
+    borderRadius: 8,
+    overflow: 'hidden',
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  activeThumbnail: {
+    borderColor: COLORS.primary,
+  },
+  thumbnailStripImage: {
+    width: '100%',
+    height: '100%',
   },
 });
