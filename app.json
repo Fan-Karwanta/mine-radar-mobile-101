@@ -1,21 +1,38 @@
 {
   "expo": {
     "name": "Mining App",
-    "slug": "Mining App",
+    "slug": "mining-app",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/adaptive-icon2.png",
     "scheme": "myapp",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
+    "platforms": [
+      "ios",
+      "android"
+    ],
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.miningapp.mobile"
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon2.png",
         "backgroundColor": "#ffffff"
-      }
+      },
+      "package": "com.miningapp.mobile",
+      "versionCode": 1,
+      "permissions": [
+        "android.permission.INTERNET",
+        "android.permission.ACCESS_NETWORK_STATE",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.CAMERA",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "web": {
       "bundler": "metro",
@@ -32,10 +49,32 @@
           "resizeMode": "contain",
           "backgroundColor": "#ffffff"
         }
+      ],
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "This app needs access to location for GPS coordinates in reports."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "This app needs access to photos to attach images to reports.",
+          "cameraPermission": "This app needs access to camera to take photos for reports."
+        }
       ]
     ],
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "extra": {
+      "router": {
+        "origin": false
+      },
+      "eas": {
+        "projectId": "a40d859d-d835-428a-8a13-b287cd78a8db"
+      }
+    },
+    "owner": "fan_karwanta"
   }
 }
