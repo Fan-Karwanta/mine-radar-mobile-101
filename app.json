@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "MineRadar",
-    "slug": "mine-radar-app",
+    "slug": "mining-app",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/adaptive-icon2.png",
