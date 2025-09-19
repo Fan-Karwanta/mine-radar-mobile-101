@@ -139,6 +139,34 @@ class SQLiteService {
         );
       `);
 
+      // Report drafts table for offline draft storage
+      await this.db.execAsync(`
+        CREATE TABLE IF NOT EXISTS report_drafts (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          draft_id TEXT UNIQUE,
+          reporter_id TEXT,
+          report_type TEXT,
+          status TEXT DEFAULT 'draft',
+          language TEXT DEFAULT 'english',
+          gps_location TEXT,
+          location TEXT,
+          incident_date TEXT,
+          incident_time TEXT,
+          project_info TEXT,
+          commodity TEXT,
+          site_status TEXT,
+          operator_info TEXT,
+          additional_info TEXT,
+          form_data TEXT,
+          attachments TEXT,
+          is_synced INTEGER DEFAULT 0,
+          needs_sync INTEGER DEFAULT 1,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          synced_at DATETIME
+        );
+      `);
+
       // Initialize sync status for each table
       await this.db.execAsync(`
         INSERT OR IGNORE INTO sync_status (table_name) VALUES 
@@ -324,11 +352,7 @@ class SQLiteService {
         throw new Error(`Invalid table name: ${tableName}`);
       }
 
-      // Force recreate tables to ensure no UNIQUE constraints exist
-      console.log(`🔧 Ensuring ${sqliteTableName} has no UNIQUE constraints...`);
-      await this.forceRecreateTablesWithoutConstraints();
-
-      // Clear existing data
+      // Clear existing data (tables are already recreated without constraints during init)
       await this.db.runAsync(`DELETE FROM ${sqliteTableName}`);
       
       console.log(`📝 Starting to save ALL ${records.length} records to ${sqliteTableName} (including duplicates)`);
@@ -356,23 +380,51 @@ class SQLiteService {
             seenIds.add(record._id);
           }
 
-          // Save ALL records including duplicates
-          await this.insertDirectoryRecord(sqliteTableName, record);
-          successCount++;
+          // Save ALL records including duplicates with retry logic
+          let retryCount = 0;
+          let inserted = false;
+          
+          while (!inserted && retryCount < 3) {
+            try {
+              await this.insertDirectoryRecord(sqliteTableName, record);
+              inserted = true;
+              successCount++;
+            } catch (insertError) {
+              retryCount++;
+              
+              // If table doesn't exist, recreate it
+              if (insertError.message.includes('no such table')) {
+                console.log(`🔧 Table ${sqliteTableName} missing, recreating...`);
+                await this.createDirectoryTables();
+                continue;
+              }
+              
+              // If this is the final retry, log the error
+              if (retryCount >= 3) {
+                errorCount++;
+                console.error(`❌ Failed to insert record ${record._id} after ${retryCount} retries:`, insertError.message);
+                console.error('📋 Record data sample:', {
+                  id: record._id,
+                  hasRequiredFields: !!(record.contractNumber || record.permitNumber || record.complaintNumber),
+                  fieldCount: Object.keys(record).length,
+                  nullFields: Object.keys(record).filter(key => record[key] === null || record[key] === undefined)
+                });
+                break;
+              }
+              
+              // Wait a bit before retry
+              await new Promise(resolve => setTimeout(resolve, 10));
+            }
+          }
           
           // Log progress every 50 records
           if (successCount % 50 === 0) {
             console.log(`📊 Progress: ${successCount}/${records.length} records saved to ${sqliteTableName}`);
           }
-        } catch (insertError) {
+        } catch (outerError) {
+          // This shouldn't happen since we handle errors in the retry loop
           errorCount++;
-          console.error(`❌ Failed to insert record ${record._id}:`, insertError.message);
-          console.error('📋 Record data sample:', {
-            id: record._id,
-            hasRequiredFields: !!(record.contractNumber || record.permitNumber || record.complaintNumber),
-            fieldCount: Object.keys(record).length,
-            nullFields: Object.keys(record).filter(key => record[key] === null || record[key] === undefined)
-          });
+          console.error(`❌ Unexpected error processing record ${record._id}:`, outerError.message);
         }
       }
       
@@ -757,16 +809,279 @@ class SQLiteService {
       const nationalCount = await this.db.getFirstAsync('SELECT COUNT(*) as count FROM directory_national');
       const localCount = await this.db.getFirstAsync('SELECT COUNT(*) as count FROM directory_local');
       const hotspotsCount = await this.db.getFirstAsync('SELECT COUNT(*) as count FROM directory_hotspots');
+      const draftsCount = await this.db.getFirstAsync('SELECT COUNT(*) as count FROM report_drafts');
       
       return {
         national: nationalCount.count,
         local: localCount.count,
         hotspots: hotspotsCount.count,
+        drafts: draftsCount.count,
         total: nationalCount.count + localCount.count + hotspotsCount.count
       };
     } catch (error) {
       console.error('Error getting storage info:', error);
-      return { national: 0, local: 0, hotspots: 0, total: 0 };
+      return { national: 0, local: 0, hotspots: 0, drafts: 0, total: 0 };
+    }
+  }
+
+  // Offline Draft Methods
+  async saveOfflineDraft(draftData) {
+    try {
+      await this.init();
+      
+      // Generate unique draft ID if not provided
+      const draftId = draftData.draftId || `OFFLINE_DRAFT_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      
+      // Serialize complex objects to JSON strings
+      const serializedData = {
+        draft_id: draftId,
+        reporter_id: draftData.reporterId,
+        report_type: draftData.type,
+        status: draftData.status || 'draft',
+        language: draftData.language || 'english',
+        gps_location: JSON.stringify(draftData.gpsLocation || {}),
+        location: draftData.location || '',
+        incident_date: draftData.incidentDate || '',
+        incident_time: draftData.incidentTime || '',
+        project_info: JSON.stringify(draftData.projectInfo || {}),
+        commodity: draftData.commodity || '',
+        site_status: draftData.siteStatus || '',
+        operator_info: JSON.stringify(draftData.operatorInfo || {}),
+        additional_info: draftData.additionalInfo || '',
+        form_data: JSON.stringify(draftData.formData || {}),
+        attachments: JSON.stringify(draftData.attachments || []),
+        is_synced: 0,
+        needs_sync: 1
+      };
+
+      await this.db.runAsync(
+        `INSERT OR REPLACE INTO report_drafts 
+         (draft_id, reporter_id, report_type, status, language, gps_location, location, 
+          incident_date, incident_time, project_info, commodity, site_status, 
+          operator_info, additional_info, form_data, attachments, is_synced, needs_sync, updated_at) 
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
+        [
+          serializedData.draft_id, serializedData.reporter_id, serializedData.report_type,
+          serializedData.status, serializedData.language, serializedData.gps_location,
+          serializedData.location, serializedData.incident_date, serializedData.incident_time,
+          serializedData.project_info, serializedData.commodity, serializedData.site_status,
+          serializedData.operator_info, serializedData.additional_info, serializedData.form_data,
+          serializedData.attachments, serializedData.is_synced, serializedData.needs_sync
+        ]
+      );
+      
+      console.log('✅ Draft saved offline successfully:', draftId);
+      return { success: true, draftId: draftId };
+    } catch (error) {
+      console.error('❌ Error saving offline draft:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  async getOfflineDrafts(reporterId) {
+    try {
+      await this.init();
+      
+      const drafts = await this.db.getAllAsync(
+        'SELECT * FROM report_drafts WHERE reporter_id = ? ORDER BY updated_at DESC',
+        [reporterId]
+      );
+      
+      // Transform SQLite records back to original format
+      const transformedDrafts = drafts.map(draft => ({
+        _id: draft.draft_id,
+        draftId: draft.draft_id,
+        reporterId: draft.reporter_id,
+        reportType: draft.report_type,
+        status: draft.status,
+        language: draft.language,
+        gpsLocation: this.safeJSONParse(draft.gps_location),
+        location: draft.location,
+        incidentDate: draft.incident_date,
+        incidentTime: draft.incident_time,
+        projectInfo: this.safeJSONParse(draft.project_info),
+        commodity: draft.commodity,
+        siteStatus: draft.site_status,
+        operatorInfo: this.safeJSONParse(draft.operator_info),
+        additionalInfo: draft.additional_info,
+        formData: this.safeJSONParse(draft.form_data),
+        attachments: this.safeJSONParse(draft.attachments),
+        isSynced: draft.is_synced === 1,
+        needsSync: draft.needs_sync === 1,
+        createdAt: draft.created_at,
+        updatedAt: draft.updated_at,
+        syncedAt: draft.synced_at,
+        isOffline: true // Flag to identify offline drafts
+      }));
+      
+      console.log(`📱 Retrieved ${transformedDrafts.length} offline drafts for user ${reporterId}`);
+      return { success: true, data: transformedDrafts };
+    } catch (error) {
+      console.error('❌ Error getting offline drafts:', error);
+      return { success: false, data: [] };
+    }
+  }
+
+  async updateOfflineDraft(draftId, draftData) {
+    try {
+      await this.init();
+      
+      // Serialize complex objects to JSON strings
+      const serializedData = {
+        reporter_id: draftData.reporterId,
+        report_type: draftData.type,
+        status: draftData.status || 'draft',
+        language: draftData.language || 'english',
+        gps_location: JSON.stringify(draftData.gpsLocation || {}),
+        location: draftData.location || '',
+        incident_date: draftData.incidentDate || '',
+        incident_time: draftData.incidentTime || '',
+        project_info: JSON.stringify(draftData.projectInfo || {}),
+        commodity: draftData.commodity || '',
+        site_status: draftData.siteStatus || '',
+        operator_info: JSON.stringify(draftData.operatorInfo || {}),
+        additional_info: draftData.additionalInfo || '',
+        form_data: JSON.stringify(draftData.formData || {}),
+        attachments: JSON.stringify(draftData.attachments || []),
+        needs_sync: 1 // Mark as needing sync when updated
+      };
+
+      const result = await this.db.runAsync(
+        `UPDATE report_drafts SET 
+         reporter_id = ?, report_type = ?, status = ?, language = ?, gps_location = ?, 
+         location = ?, incident_date = ?, incident_time = ?, project_info = ?, 
+         commodity = ?, site_status = ?, operator_info = ?, additional_info = ?, 
+         form_data = ?, attachments = ?, needs_sync = ?, updated_at = CURRENT_TIMESTAMP
+         WHERE draft_id = ?`,
+        [
+          serializedData.reporter_id, serializedData.report_type, serializedData.status,
+          serializedData.language, serializedData.gps_location, serializedData.location,
+          serializedData.incident_date, serializedData.incident_time, serializedData.project_info,
+          serializedData.commodity, serializedData.site_status, serializedData.operator_info,
+          serializedData.additional_info, serializedData.form_data, serializedData.attachments,
+          serializedData.needs_sync, draftId
+        ]
+      );
+      
+      if (result.changes > 0) {
+        console.log('✅ Offline draft updated successfully:', draftId);
+        return { success: true };
+      } else {
+        console.warn('⚠️ No draft found with ID:', draftId);
+        return { success: false, error: 'Draft not found' };
+      }
+    } catch (error) {
+      console.error('❌ Error updating offline draft:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  async deleteOfflineDraft(draftId) {
+    try {
+      await this.init();
+      
+      const result = await this.db.runAsync(
+        'DELETE FROM report_drafts WHERE draft_id = ?',
+        [draftId]
+      );
+      
+      if (result.changes > 0) {
+        console.log('✅ Offline draft deleted successfully:', draftId);
+        return { success: true };
+      } else {
+        console.warn('⚠️ No draft found with ID:', draftId);
+        return { success: false, error: 'Draft not found' };
+      }
+    } catch (error) {
+      console.error('❌ Error deleting offline draft:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  async getUnsyncedDrafts(reporterId) {
+    try {
+      await this.init();
+      
+      const drafts = await this.db.getAllAsync(
+        'SELECT * FROM report_drafts WHERE reporter_id = ? AND needs_sync = 1 ORDER BY updated_at ASC',
+        [reporterId]
+      );
+      
+      // Transform SQLite records back to original format
+      const transformedDrafts = drafts.map(draft => ({
+        _id: draft.draft_id,
+        draftId: draft.draft_id,
+        reporterId: draft.reporter_id,
+        reportType: draft.report_type,
+        status: draft.status,
+        language: draft.language,
+        gpsLocation: this.safeJSONParse(draft.gps_location),
+        location: draft.location,
+        incidentDate: draft.incident_date,
+        incidentTime: draft.incident_time,
+        projectInfo: this.safeJSONParse(draft.project_info),
+        commodity: draft.commodity,
+        siteStatus: draft.site_status,
+        operatorInfo: this.safeJSONParse(draft.operator_info),
+        additionalInfo: draft.additional_info,
+        formData: this.safeJSONParse(draft.form_data),
+        attachments: this.safeJSONParse(draft.attachments),
+        createdAt: draft.created_at,
+        updatedAt: draft.updated_at
+      }));
+      
+      console.log(`🔄 Found ${transformedDrafts.length} unsynced drafts for user ${reporterId}`);
+      return transformedDrafts;
+    } catch (error) {
+      console.error('❌ Error getting unsynced drafts:', error);
+      return [];
+    }
+  }
+
+  async markDraftAsSynced(draftId, mongoId = null) {
+    try {
+      await this.init();
+      
+      const result = await this.db.runAsync(
+        `UPDATE report_drafts SET 
+         is_synced = 1, needs_sync = 0, synced_at = CURRENT_TIMESTAMP
+         WHERE draft_id = ?`,
+        [draftId]
+      );
+      
+      if (result.changes > 0) {
+        console.log('✅ Draft marked as synced:', draftId);
+        return { success: true };
+      } else {
+        console.warn('⚠️ No draft found with ID:', draftId);
+        return { success: false, error: 'Draft not found' };
+      }
+    } catch (error) {
+      console.error('❌ Error marking draft as synced:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  async clearAllOfflineDrafts() {
+    try {
+      await this.init();
+      
+      await this.db.runAsync('DELETE FROM report_drafts');
+      console.log('🗑️ All offline drafts cleared');
+      return { success: true };
+    } catch (error) {
+      console.error('❌ Error clearing offline drafts:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  // Helper method to safely parse JSON strings
+  safeJSONParse(jsonString) {
+    try {
+      return jsonString ? JSON.parse(jsonString) : {};
+    } catch (error) {
+      console.warn('⚠️ Failed to parse JSON:', jsonString);
+      return {};
     }
   }
 }

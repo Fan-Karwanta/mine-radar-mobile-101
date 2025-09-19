@@ -140,7 +140,7 @@ export default function Profile() {
         </View>
       </View>
 
-      {/* App Settings */}
+      {/* App Settings 
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>App Settings</Text>
         <View style={styles.cardContainer}>
@@ -156,14 +156,15 @@ export default function Profile() {
             subtitle="Light mode"
             onPress={() => Alert.alert('Coming Soon', 'Theme selection will be available soon')}
           />
+          {/* Offline Data 
           <ProfileCard
             icon="download-outline"
             title="Offline Data"
             subtitle="Manage offline content"
             onPress={() => Alert.alert('Coming Soon', 'Offline data management will be available soon')}
-          />
+          /> 
         </View>
-      </View>
+      </View>*/}
 
       {/* Support */}
       <View style={styles.section}>

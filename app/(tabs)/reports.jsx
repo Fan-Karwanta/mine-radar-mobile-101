@@ -20,6 +20,7 @@ import { useAuthStore } from '../../store/authStore';
 import reportService from '../../services/reportService';
 import locationService from '../../services/locationService';
 import imageService from '../../services/imageService';
+import offlineDraftService from '../../services/offlineDraftService';
 
 // Translation object for Illegal Mining
 const illegalMiningTranslations = {
@@ -679,6 +680,10 @@ export default function Reports() {
   const [filterStatus, setFilterStatus] = useState('all');
   const [filterType, setFilterType] = useState('all');
   
+  // Network and sync state
+  const [networkStatus, setNetworkStatus] = useState({ isOnline: true });
+  const [syncStatus, setSyncStatus] = useState({ unsyncedCount: 0, canSync: false });
+  
   // Form state for Illegal Mining checklist
   const [formData, setFormData] = useState({
     latitude: '',
@@ -987,19 +992,38 @@ export default function Reports() {
     try {
       setIsLoading(true);
       
-      // Fetch reports and drafts separately
-      const [reportsResult, draftsResult] = await Promise.all([
-        reportService.getUserReports(user?.id || user?.username, 1, 50),
-        reportService.getUserDrafts(user?.id || user?.username, 1, 50)
-      ]);
+      // Get network status first
+      const currentNetworkStatus = await offlineDraftService.getNetworkStatus();
+      setNetworkStatus(currentNetworkStatus);
       
-      if (reportsResult.success) {
-        setReports(reportsResult.data || []);
+      // Fetch reports (online only)
+      let reportsData = [];
+      if (currentNetworkStatus.isOnline) {
+        try {
+          const reportsResult = await reportService.getUserReports(user?.id || user?.username, 1, 50);
+          if (reportsResult.success) {
+            reportsData = reportsResult.data || [];
+          }
+        } catch (error) {
+          console.warn('Failed to fetch online reports:', error.message);
+        }
       }
       
+      // Fetch drafts (combines online and offline)
+      const draftsResult = await offlineDraftService.getAllDrafts(user?.id || user?.username);
+      let draftsData = [];
       if (draftsResult.success) {
-        setDrafts(draftsResult.data || []);
+        draftsData = draftsResult.data || [];
       }
+      
+      // Update sync status
+      const currentSyncStatus = await offlineDraftService.getSyncStatus(user?.id || user?.username);
+      setSyncStatus(currentSyncStatus);
+      
+      setReports(reportsData);
+      setDrafts(draftsData);
+      
+      console.log(`📊 Loaded ${reportsData.length} reports and ${draftsData.length} drafts (${draftsResult.offlineCount || 0} offline, ${draftsResult.onlineCount || 0} online)`);
     } catch (error) {
       console.error('Error fetching reports:', error);
       Alert.alert('Error', 'Failed to load reports. Please try again.');
@@ -1016,6 +1040,28 @@ export default function Reports() {
       console.error('Error refreshing reports:', error);
     } finally {
       setIsRefreshing(false);
+    }
+  };
+
+  // Sync offline drafts to online
+  const handleSyncDrafts = async () => {
+    try {
+      const result = await offlineDraftService.syncOfflineDrafts(user?.id || user?.username);
+      if (result.success) {
+        if (result.syncedCount > 0) {
+          Alert.alert('Sync Complete', 
+            `Successfully synced ${result.syncedCount} draft(s) to the server.${result.failedCount > 0 ? `\n\n${result.failedCount} draft(s) failed to sync.` : ''}`, [
+            { text: 'OK', onPress: () => refreshReports() }
+          ]);
+        } else {
+          Alert.alert('Sync Complete', 'No drafts to sync.');
+        }
+      } else {
+        Alert.alert('Sync Failed', result.error || 'Failed to sync drafts');
+      }
+    } catch (error) {
+      console.error('Error syncing drafts:', error);
+      Alert.alert('Sync Failed', 'An error occurred while syncing drafts');
     }
   };
 
@@ -1127,30 +1173,64 @@ export default function Reports() {
     setIsSavingDraft(true);
 
     try {
+      // Prepare draft data with proper structure for offline storage
       const draftData = {
         type: selectedCategory.id,
         reporterId: user?.id || user?.username,
         language: language,
-        ...currentFormData,
+        gpsLocation: {
+          latitude: currentFormData.latitude ? parseFloat(currentFormData.latitude) : null,
+          longitude: currentFormData.longitude ? parseFloat(currentFormData.longitude) : null
+        },
+        location: currentFormData.location || '',
+        incidentDate: currentFormData.date || '',
+        incidentTime: currentFormData.time || '',
+        projectInfo: {
+          hasSignboard: currentFormData.hasSignboard === true ? 'yes' : 
+                       currentFormData.hasSignboard === false ? 'no' : 'not_determined',
+          projectName: currentFormData.projectName || ''
+        },
+        commodity: currentFormData.commodity || '',
+        siteStatus: currentFormData.siteStatus || 'operating',
+        operatorInfo: {
+          name: currentFormData.operatorName || '',
+          address: currentFormData.operatorAddress || '',
+          determinationMethod: currentFormData.operatorDetermination || ''
+        },
+        additionalInfo: currentFormData.additionalInfo || '',
+        formData: currentFormData, // Store complete form data for reconstruction
         attachments: uploadedImages.map(img => ({
-          url: img.url,
+          url: img.url || img.uri || img.preview,
           publicId: img.publicId,
           type: 'image',
           geotagged: img.geotagged || false,
-          uploadedAt: img.uploadedAt
+          uploadedAt: img.uploadedAt || new Date().toISOString()
         }))
       };
 
       let result;
       if (isEditingMode && editingDraft) {
-        result = await reportService.updateDraft(editingDraft._id, draftData);
+        // Use the appropriate service based on draft type
+        if (editingDraft.isOffline || editingDraft._id.startsWith('OFFLINE_DRAFT_')) {
+          result = await offlineDraftService.updateDraft(editingDraft._id, draftData);
+        } else {
+          result = await offlineDraftService.updateDraft(editingDraft._id, draftData);
+        }
       } else {
-        result = await reportService.saveDraft(draftData);
+        // Always use offline draft service for new drafts (it handles online/offline automatically)
+        result = await offlineDraftService.saveDraft(draftData);
       }
       
       if (result.success) {
-        Alert.alert('Success', 
-          isEditingMode ? 'Draft updated successfully!' : 'Report saved as draft!', [
+        const statusMessage = result.isOffline 
+          ? (isEditingMode ? 'Draft updated offline successfully!' : 'Report saved as draft offline!')
+          : (isEditingMode ? 'Draft updated successfully!' : 'Report saved as draft!');
+          
+        const networkMessage = result.isOffline 
+          ? '\n\n📵 Saved offline - will sync when online' 
+          : '\n\n📶 Saved online';
+
+        Alert.alert('Success', statusMessage + networkMessage, [
           { 
             text: 'OK', 
             onPress: () => {
@@ -1165,7 +1245,7 @@ export default function Reports() {
           }
         ]);
       } else {
-        Alert.alert('Error', result.message || 'Failed to save draft');
+        Alert.alert('Error', result.error || 'Failed to save draft');
       }
     } catch (error) {
       console.error('Error saving draft:', error);
@@ -1195,23 +1275,61 @@ export default function Reports() {
   const populateFormFromDraft = (draft) => {
     console.log('Populating form from draft:', draft);
     console.log('Draft report type:', draft.reportType);
+    console.log('Is offline draft:', draft.isOffline);
     
-    const baseData = {
-      latitude: draft.gpsLocation?.latitude?.toString() || '',
-      longitude: draft.gpsLocation?.longitude?.toString() || '',
-      location: draft.location || '',
-      date: draft.incidentDate || '',
-      time: draft.incidentTime || '',
-      hasSignboard: draft.projectInfo?.hasSignboard === 'yes' ? true : 
-                   draft.projectInfo?.hasSignboard === 'no' ? false : null,
-      projectName: draft.projectInfo?.projectName || '',
-      commodity: draft.commodity || '',
-      siteStatus: draft.siteStatus || 'operating',
-      operatorName: draft.operatorInfo?.name || '',
-      operatorAddress: draft.operatorInfo?.address || '',
-      operatorDetermination: draft.operatorInfo?.determinationMethod || '',
-      additionalInfo: draft.additionalInfo || ''
-    };
+    // For offline drafts, use the stored formData if available, otherwise use the structured data
+    const useStoredFormData = draft.isOffline && draft.formData;
+    
+    let baseData;
+    if (useStoredFormData) {
+      // Use the complete form data stored for offline drafts
+      baseData = {
+        ...draft.formData,
+        // Ensure these fields are properly set from the structured data
+        latitude: draft.gpsLocation?.latitude?.toString() || draft.formData.latitude || '',
+        longitude: draft.gpsLocation?.longitude?.toString() || draft.formData.longitude || '',
+        location: draft.location || draft.formData.location || '',
+        date: draft.incidentDate || draft.formData.date || '',
+        time: draft.incidentTime || draft.formData.time || '',
+        commodity: draft.commodity || draft.formData.commodity || '',
+        siteStatus: draft.siteStatus || draft.formData.siteStatus || 'operating',
+        additionalInfo: draft.additionalInfo || draft.formData.additionalInfo || ''
+      };
+    } else {
+      // Use the structured data for online drafts
+      baseData = {
+        latitude: draft.gpsLocation?.latitude?.toString() || '',
+        longitude: draft.gpsLocation?.longitude?.toString() || '',
+        location: draft.location || '',
+        date: draft.incidentDate || '',
+        time: draft.incidentTime || '',
+        hasSignboard: draft.projectInfo?.hasSignboard === 'yes' ? true : 
+                     draft.projectInfo?.hasSignboard === 'no' ? false : null,
+        projectName: draft.projectInfo?.projectName || '',
+        commodity: draft.commodity || '',
+        siteStatus: draft.siteStatus || 'operating',
+        operatorName: draft.operatorInfo?.name || '',
+        operatorAddress: draft.operatorInfo?.address || '',
+        operatorDetermination: draft.operatorInfo?.determinationMethod || '',
+        additionalInfo: draft.additionalInfo || ''
+      };
+    }
+    
+    // Set uploaded images from draft attachments
+    if (draft.attachments && draft.attachments.length > 0) {
+      const draftImages = draft.attachments.map((attachment, index) => ({
+        id: `draft_image_${index}`,
+        url: attachment.url,
+        uri: attachment.url,
+        preview: attachment.url,
+        publicId: attachment.publicId,
+        type: attachment.type || 'image',
+        geotagged: attachment.geotagged || false,
+        uploadedAt: attachment.uploadedAt,
+        isUploaded: true
+      }));
+      setUploadedImages(draftImages);
+    }
 
     // Set form data based on report type
     switch (draft.reportType) {
@@ -2286,8 +2404,16 @@ export default function Reports() {
         <View style={styles.cardHeader}>
           <View style={styles.cardTitleContainer}>
             <Text style={styles.cardTitle} numberOfLines={2}>{categoryTitle}</Text>
-            <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status || 'draft') }]}>
-              <Text style={styles.statusText}>{getStatusText(item.status || 'draft')}</Text>
+            <View style={styles.cardBadges}>
+              <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status || 'draft') }]}>
+                <Text style={styles.statusText}>{getStatusText(item.status || 'draft')}</Text>
+              </View>
+              {item.isOffline && (
+                <View style={styles.offlineBadge}>
+                  <Ionicons name="cloud-offline" size={10} color="white" />
+                  <Text style={styles.offlineBadgeText}>Offline</Text>
+                </View>
+              )}
             </View>
           </View>
         </View>
@@ -5074,8 +5200,38 @@ export default function Reports() {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Reports</Text>
-        <Text style={styles.headerSubtitle}>Mining violations and incidents</Text>
+        <View style={styles.headerContent}>
+          <View>
+            <Text style={styles.headerTitle}>Reports</Text>
+            <Text style={styles.headerSubtitle}>Mining violations and incidents</Text>
+          </View>
+          
+          {/* Network Status and Sync */}
+          <View style={styles.headerActions}>
+            {/* Network Status Indicator */}
+            <View style={[styles.networkStatus, { backgroundColor: networkStatus.isOnline ? '#4CAF50' : '#F44336' }]}>
+              <Ionicons 
+                name={networkStatus.isOnline ? 'wifi' : 'wifi-outline'} 
+                size={12} 
+                color="white" 
+              />
+              <Text style={styles.networkStatusText}>
+                {networkStatus.isOnline ? 'Online' : 'Offline'}
+              </Text>
+            </View>
+            
+            {/* Sync Button */}
+            {syncStatus.canSync && (
+              <TouchableOpacity 
+                style={styles.syncButton}
+                onPress={handleSyncDrafts}
+              >
+                <Ionicons name="sync" size={16} color={COLORS.primary} />
+                <Text style={styles.syncButtonText}>{syncStatus.unsyncedCount}</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
       </View>
 
       {/* Tab Navigation */}
@@ -5218,6 +5374,45 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: COLORS.textSecondary,
   },
+  headerContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  networkStatus: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    gap: 4,
+  },
+  networkStatusText: {
+    fontSize: 11,
+    color: 'white',
+    fontWeight: '600',
+  },
+  syncButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.background,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: COLORS.primary,
+    gap: 4,
+  },
+  syncButtonText: {
+    fontSize: 11,
+    color: COLORS.primary,
+    fontWeight: '600',
+  },
   // Tab Navigation Styles
   tabContainer: {
     flexDirection: 'row',
@@ -5353,16 +5548,34 @@ const styles = StyleSheet.create({
     color: COLORS.textPrimary,
     marginBottom: 8,
   },
+  cardBadges: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
   statusBadge: {
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 12,
-    alignSelf: 'flex-start',
   },
   statusText: {
     fontSize: 12,
-    color: COLORS.white,
     fontWeight: '600',
+    color: COLORS.white,
+  },
+  offlineBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FF9800',
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderRadius: 10,
+    gap: 3,
+  },
+  offlineBadgeText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: 'white',
   },
   cardInfo: {
     gap: 8,

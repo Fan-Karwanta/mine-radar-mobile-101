@@ -62,6 +62,10 @@ class OfflineDirectoryService {
 
       console.log('Starting directory data download...');
       
+      // Force recreate all tables ONCE at the beginning to ensure no UNIQUE constraints
+      console.log('🔧 Ensuring all tables have no UNIQUE constraints before download...');
+      await sqliteService.forceRecreateTablesWithoutConstraints();
+      
       // Reset progress
       this.downloadProgress = { national: 0, local: 0, hotspots: 0, overall: 0 };
       
@@ -149,13 +153,15 @@ class OfflineDirectoryService {
       const totalDuplicates = duplicateDetails.national.duplicateCount + duplicateDetails.local.duplicateCount + duplicateDetails.hotspots.duplicateCount;
       const totalSavedToSQLite = duplicateDetails.national.totalSavedToSQLite + duplicateDetails.local.totalSavedToSQLite + duplicateDetails.hotspots.totalSavedToSQLite;
       const totalUniqueMongoIds = duplicateDetails.national.uniqueMongoIds + duplicateDetails.local.uniqueMongoIds + duplicateDetails.hotspots.uniqueMongoIds;
+      const totalDownloadedFromMongoDB = downloadDetails.national + downloadDetails.local + downloadDetails.hotspots;
       
       console.log('✅ Download Complete - ALL MongoDB Records Captured:');
       console.log(`  📊 National: ${downloadDetails.national} records from MongoDB`);
       console.log(`  📊 Local: ${downloadDetails.local} records from MongoDB`);
       console.log(`  📊 Hotspots: ${downloadDetails.hotspots} records from MongoDB`);
-      console.log(`  📱 Total: ${downloadDetails.national + downloadDetails.local + downloadDetails.hotspots} records saved to SQLite`);
+      console.log(`  📱 Total: ${totalDownloadedFromMongoDB} records saved to SQLite`);
       console.log(`  🎉 SUCCESS: All ${totalSavedToSQLite} MongoDB records captured offline!`);
+      console.log(`  📊 Actual SQLite Total: ${storageInfo.total} records`);
       
       if (totalDuplicates > 0) {
         console.log('🔄 Duplicate MongoDB IDs Summary:');

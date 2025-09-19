@@ -99,19 +99,31 @@ function Maps() {
   };
 
   const openInGoogleMaps = async () => {
-    const googleMapsUrl = 'https://www.google.com/maps/d/u/0/edit?mid=1Zy8ktwgWar8ASol8izAae5ctRXYifs0&usp=sharing';
+    // Your shared map URL
+    const sharedMapUrl = 'https://www.google.com/maps/d/u/2/edit?mid=1esx3idDqFg-Zhv5TbX4hCrv13WqLpjg&usp=sharing';
+    
+    // Try to open in Google Maps app first, then fallback to browser
+    const googleMapsAppUrl = `googlemaps://maps.google.com/maps/d/u/2/edit?mid=1esx3idDqFg-Zhv5TbX4hCrv13WqLpjg&usp=sharing`;
     
     try {
-      const supported = await Linking.canOpenURL(googleMapsUrl);
+      // First try to open in Google Maps app
+      const canOpenApp = await Linking.canOpenURL(googleMapsAppUrl);
       
-      if (supported) {
-        await Linking.openURL(googleMapsUrl);
+      if (canOpenApp) {
+        await Linking.openURL(googleMapsAppUrl);
       } else {
-        Alert.alert(
-          'Unable to Open',
-          'Cannot open Google Maps. Please make sure you have Google Maps installed on your device.',
-          [{ text: 'OK' }]
-        );
+        // Fallback to opening in browser
+        const canOpenBrowser = await Linking.canOpenURL(sharedMapUrl);
+        
+        if (canOpenBrowser) {
+          await Linking.openURL(sharedMapUrl);
+        } else {
+          Alert.alert(
+            'Unable to Open',
+            'Cannot open the map. Please make sure you have Google Maps installed or a web browser available.',
+            [{ text: 'OK' }]
+          );
+        }
       }
     } catch (error) {
       console.error('Error opening Google Maps:', error);
@@ -129,7 +141,7 @@ function Maps() {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>MPSA Sample Map</Text>
+        <Text style={styles.headerTitle}>Mining Sites Map</Text>
       </View>
 
 
@@ -138,7 +150,7 @@ function Maps() {
         <WebView
           ref={mapRef}
           style={styles.map}
-          source={{ uri: 'https://www.google.com/maps/d/embed?mid=1Zy8ktwgWar8ASol8izAae5ctRXYifs0' }}
+          source={{ uri: 'https://www.google.com/maps/d/embed?mid=1esx3idDqFg-Zhv5TbX4hCrv13WqLpjg' }}
           javaScriptEnabled={true}
           domStorageEnabled={true}
           startInLoadingState={true}

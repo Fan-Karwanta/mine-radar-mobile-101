@@ -821,7 +821,7 @@ export default function Directory() {
       <View style={styles.header}>
         <View style={styles.headerContent}>
           <View style={styles.headerLeft}>
-            <Text style={styles.headerTitle}>Directory</Text>
+            
             {/* Network Status Indicator */}
             <View style={[styles.statusIndicator, { backgroundColor: isOnline ? '#4CAF50' : '#FF5722' }]}>
               <Ionicons 
@@ -864,6 +864,7 @@ export default function Directory() {
           <Text style={styles.headerSubtitle}>
             {selectedCategory ? selectedCategory.label : 'Mining permits and applications database'}
           </Text>
+          
           
           {/* Offline Data Status */}
           {offlineDataStatus.isDownloaded && (
@@ -1145,7 +1146,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   headerTitle: {
-    fontSize: 20,
+    fontSize: 12,
     fontWeight: 'bold',
     color: COLORS.textPrimary,
   },
