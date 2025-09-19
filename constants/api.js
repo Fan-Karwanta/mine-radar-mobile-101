@@ -15,7 +15,7 @@ export const API_BASE_URL = "https://mine-radar-backend-101.onrender.com/api";
 // export const API_BASE_URL = "http://10.0.18.222:3000/api"; 
 
 // IN LOCAL - PLDT wifi n/a coffee
-//export const API_URL = "http://192.168.1.230:3000/api";
-//export const API_BASE_URL = "http://192.168.1.230:3000/api";
+// export const API_URL = "http://192.168.1.230:3000/api";
+// export const API_BASE_URL = "http://192.168.1.230:3000/api";
 
 

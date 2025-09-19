@@ -20,7 +20,7 @@ import { useAuthStore } from '../../store/authStore';
 import reportService from '../../services/reportService';
 import locationService from '../../services/locationService';
 import imageService from '../../services/imageService';
-import offlineDraftService from '../../services/offlineDraftService';
+import asyncStorageDraftService from '../../services/asyncStorageDraftService';
 
 // Translation object for Illegal Mining
 const illegalMiningTranslations = {
@@ -993,7 +993,7 @@ export default function Reports() {
       setIsLoading(true);
       
       // Get network status first
-      const currentNetworkStatus = await offlineDraftService.getNetworkStatus();
+      const currentNetworkStatus = await asyncStorageDraftService.getNetworkStatus();
       setNetworkStatus(currentNetworkStatus);
       
       // Fetch reports (online only)
@@ -1010,15 +1010,15 @@ export default function Reports() {
       }
       
       // Fetch drafts (combines online and offline)
-      const draftsResult = await offlineDraftService.getAllDrafts(user?.id || user?.username);
+      const draftsResult = await asyncStorageDraftService.getDrafts(user?.id || user?.username);
       let draftsData = [];
       if (draftsResult.success) {
         draftsData = draftsResult.data || [];
       }
       
       // Update sync status
-      const currentSyncStatus = await offlineDraftService.getSyncStatus(user?.id || user?.username);
-      setSyncStatus(currentSyncStatus);
+      const unsyncedCount = await asyncStorageDraftService.getUnsyncedCount();
+      setSyncStatus({ unsyncedCount });
       
       setReports(reportsData);
       setDrafts(draftsData);
@@ -1046,7 +1046,7 @@ export default function Reports() {
   // Sync offline drafts to online
   const handleSyncDrafts = async () => {
     try {
-      const result = await offlineDraftService.syncOfflineDrafts(user?.id || user?.username);
+      const result = await asyncStorageDraftService.syncOfflineDrafts();
       if (result.success) {
         if (result.syncedCount > 0) {
           Alert.alert('Sync Complete', 
@@ -1210,25 +1210,20 @@ export default function Reports() {
 
       let result;
       if (isEditingMode && editingDraft) {
-        // Use the appropriate service based on draft type
-        if (editingDraft.isOffline || editingDraft._id.startsWith('OFFLINE_DRAFT_')) {
-          result = await offlineDraftService.updateDraft(editingDraft._id, draftData);
-        } else {
-          result = await offlineDraftService.updateDraft(editingDraft._id, draftData);
-        }
+        // Update existing draft
+        result = await asyncStorageDraftService.updateDraft(editingDraft.id || editingDraft._id, draftData);
       } else {
-        // Always use offline draft service for new drafts (it handles online/offline automatically)
-        result = await offlineDraftService.saveDraft(draftData);
+        // Save new draft (handles online/offline automatically)
+        result = await asyncStorageDraftService.saveDraft(draftData);
       }
       
       if (result.success) {
-        const statusMessage = result.isOffline 
-          ? (isEditingMode ? 'Draft updated offline successfully!' : 'Report saved as draft offline!')
-          : (isEditingMode ? 'Draft updated successfully!' : 'Report saved as draft!');
+        // All drafts are now saved offline by default
+        const statusMessage = isEditingMode 
+          ? 'Draft updated offline successfully!' 
+          : 'Report saved as draft offline!';
           
-        const networkMessage = result.isOffline 
-          ? '\n\n📵 Saved offline - will sync when online' 
-          : '\n\n📶 Saved online';
+        const networkMessage = '\n\n📱 Saved to device storage\n🔄 Will sync to MGB CALABARZON when submitted';
 
         Alert.alert('Success', statusMessage + networkMessage, [
           { 
@@ -1256,26 +1251,214 @@ export default function Reports() {
   };
 
   const handleEditDraft = (draft) => {
+    console.log('Editing draft:', draft);
     setEditingDraft(draft);
     setIsEditingMode(true);
     
-    // Find the category for this draft
-    const category = violationCategories.find(cat => cat.id === draft.reportType);
+    // Reset all form states first
+    resetAllFormStates();
+    
+    // Find the category for this draft - use draft.type instead of draft.reportType
+    const draftType = draft.type || draft.reportType;
+    const category = violationCategories.find(cat => cat.id === draftType);
     if (category) {
       setSelectedCategory(category);
       
-      // Populate form data based on draft type
-      populateFormFromDraft(draft);
-      
-      // Show the checklist modal
-      setShowChecklistModal(true);
+      // Small delay to ensure form states are reset before populating
+      setTimeout(() => {
+        populateFormFromDraft(draft);
+        setShowChecklistModal(true);
+      }, 100);
+    } else {
+      console.error('Category not found for draft type:', draftType);
+      Alert.alert('Error', 'Unable to edit this draft. Category not found.');
     }
+  };
+
+  // Function to reset all form states
+  const resetAllFormStates = () => {
+    setFormData({
+      latitude: '',
+      longitude: '',
+      location: '',
+      date: '',
+      time: '',
+      hasSignboard: null,
+      projectName: '',
+      commodity: '',
+      siteStatus: 'operating',
+      activities: {
+        extraction: false,
+        disposition: false,
+        processing: false
+      },
+      extractionEquipment: [],
+      dispositionEquipment: [],
+      processingEquipment: [],
+      operatorName: '',
+      operatorAddress: '',
+      operatorDetermination: '',
+      nonOperatingObservations: {
+        excavations: false,
+        accessRoad: false,
+        processingFacility: false
+      },
+      conductedInterview: null,
+      guideQuestions: {
+        recentActivity: '',
+        excavationStart: '',
+        transportVehicles: '',
+        operatorName: '',
+        operatorAddress: '',
+        permits: ''
+      },
+      additionalInfo: ''
+    });
+    
+    setTransportFormData({
+      latitude: '',
+      longitude: '',
+      location: '',
+      date: '',
+      time: '',
+      violationType: '',
+      documentType: '',
+      commodity: '',
+      volumeWeight: '',
+      unit: '',
+      vehicleType: '',
+      vehicleDescription: '',
+      bodyColor: '',
+      plateNumber: '',
+      ownerName: '',
+      ownerAddress: '',
+      driverName: '',
+      driverAddress: '',
+      sourceOfMaterials: '',
+      actionsTaken: '',
+      additionalInfo: ''
+    });
+    
+    setProcessingFormData({
+      latitude: '',
+      longitude: '',
+      location: '',
+      date: '',
+      time: '',
+      hasSignboard: null,
+      projectName: '',
+      siteStatus: 'operating',
+      facilityType: '',
+      processingProducts: '',
+      operatorName: '',
+      operatorAddress: '',
+      operatorDetermination: '',
+      rawMaterialsName: '',
+      rawMaterialsLocation: '',
+      rawMaterialsDetermination: '',
+      additionalInfo: ''
+    });
+    
+    setTradingFormData({
+      latitude: '',
+      longitude: '',
+      location: '',
+      date: '',
+      time: '',
+      violationType: '',
+      businessName: '',
+      businessOwner: '',
+      businessLocation: '',
+      commodity: '',
+      sourceOfCommodityName: '',
+      sourceOfCommodityLocation: '',
+      sourceOfCommodityDetermination: '',
+      stockpiledMaterials: '',
+      dtiRegistration: '',
+      additionalInfo: ''
+    });
+    
+    setExplorationFormData({
+      latitude: '',
+      longitude: '',
+      location: '',
+      date: '',
+      time: '',
+      hasSignboard: null,
+      projectName: '',
+      activities: {
+        drilling: false,
+        testPitting: false,
+        trenching: false,
+        shaftSinking: false,
+        tunneling: false,
+        others: false
+      },
+      othersActivity: '',
+      operatorName: '',
+      operatorAddress: '',
+      operatorDetermination: '',
+      additionalInfo: ''
+    });
+    
+    setSmallScaleMiningFormData({
+      latitude: '',
+      longitude: '',
+      location: '',
+      date: '',
+      time: '',
+      hasSignboard: null,
+      projectName: '',
+      commodity: '',
+      siteStatus: 'operating',
+      activities: {
+        extraction: false,
+        disposition: false,
+        mineralProcessing: false,
+        tunneling: false,
+        shaftSinking: false,
+        goldPanning: false,
+        amalgamation: false,
+        others: false
+      },
+      equipmentUsed: {
+        extraction: '',
+        disposition: '',
+        mineralProcessing: ''
+      },
+      othersActivity: '',
+      operatorName: '',
+      operatorAddress: '',
+      operatorDetermination: '',
+      observations: {
+        excavations: false,
+        stockpiles: false,
+        tunnels: false,
+        mineShafts: false,
+        accessRoad: false,
+        processingFacility: false
+      },
+      interviewConducted: false,
+      guideQuestions: {
+        question1: '',
+        question2: '',
+        question3: '',
+        question4: '',
+        question5: '',
+        question6: ''
+      },
+      additionalInfo: ''
+    });
+    
+    setUploadedImages([]);
   };
 
   const populateFormFromDraft = (draft) => {
     console.log('Populating form from draft:', draft);
-    console.log('Draft report type:', draft.reportType);
+    const draftType = draft.type || draft.reportType;
+    console.log('Draft report type:', draftType);
     console.log('Is offline draft:', draft.isOffline);
+    console.log('Draft data structure:', JSON.stringify(draft, null, 2));
     
     // For offline drafts, use the stored formData if available, otherwise use the structured data
     const useStoredFormData = draft.isOffline && draft.formData;
@@ -1332,36 +1515,70 @@ export default function Reports() {
     }
 
     // Set form data based on report type
-    switch (draft.reportType) {
+    console.log('Setting form data for report type:', draftType);
+    switch (draftType) {
       case 'illegal_mining':
-        setFormData({
+        console.log('Setting illegal_mining form data');
+        const miningFormData = {
           ...baseData,
-          activities: {
-            extraction: draft.miningData?.operatingActivities?.extraction?.active || false,
-            disposition: draft.miningData?.operatingActivities?.disposition?.active || false,
-            processing: draft.miningData?.operatingActivities?.processing?.active || false
-          },
-          extractionEquipment: draft.miningData?.operatingActivities?.extraction?.equipment || [],
-          dispositionEquipment: draft.miningData?.operatingActivities?.disposition?.equipment || [],
-          processingEquipment: draft.miningData?.operatingActivities?.processing?.equipment || [],
-          nonOperatingObservations: {
-            excavations: draft.miningData?.nonOperatingObservations?.excavations || false,
-            accessRoad: draft.miningData?.nonOperatingObservations?.accessRoad || false,
-            processingFacility: draft.miningData?.nonOperatingObservations?.processingFacility || false
-          },
-          conductedInterview: draft.miningData?.interview?.conducted || null,
-          guideQuestions: draft.miningData?.interview?.responses || {
-            recentActivity: '',
-            excavationStart: '',
-            transportVehicles: '',
-            operatorName: '',
-            operatorAddress: '',
-            permits: ''
-          }
-        });
+          activities: useStoredFormData ? 
+            (draft.formData.activities || {
+              extraction: false,
+              disposition: false,
+              processing: false
+            }) : {
+              extraction: draft.miningData?.operatingActivities?.extraction?.active || false,
+              disposition: draft.miningData?.operatingActivities?.disposition?.active || false,
+              processing: draft.miningData?.operatingActivities?.processing?.active || false
+            },
+          extractionEquipment: useStoredFormData ? 
+            (draft.formData.extractionEquipment || []) :
+            (draft.miningData?.operatingActivities?.extraction?.equipment || []),
+          dispositionEquipment: useStoredFormData ? 
+            (draft.formData.dispositionEquipment || []) :
+            (draft.miningData?.operatingActivities?.disposition?.equipment || []),
+          processingEquipment: useStoredFormData ? 
+            (draft.formData.processingEquipment || []) :
+            (draft.miningData?.operatingActivities?.processing?.equipment || []),
+          nonOperatingObservations: useStoredFormData ? 
+            (draft.formData.nonOperatingObservations || {
+              excavations: false,
+              accessRoad: false,
+              processingFacility: false
+            }) : {
+              excavations: draft.miningData?.nonOperatingObservations?.excavations || false,
+              accessRoad: draft.miningData?.nonOperatingObservations?.accessRoad || false,
+              processingFacility: draft.miningData?.nonOperatingObservations?.processingFacility || false
+            },
+          conductedInterview: useStoredFormData ? 
+            draft.formData.conductedInterview :
+            (draft.miningData?.interview?.conducted || null),
+          guideQuestions: useStoredFormData ? 
+            (draft.formData.guideQuestions || {
+              recentActivity: '',
+              excavationStart: '',
+              transportVehicles: '',
+              operatorName: '',
+              operatorAddress: '',
+              permits: ''
+            }) : (draft.miningData?.interview?.responses || {
+              recentActivity: '',
+              excavationStart: '',
+              transportVehicles: '',
+              operatorName: '',
+              operatorAddress: '',
+              permits: ''
+            })
+        };
+        console.log('Mining form data to set:', miningFormData);
+        setFormData(miningFormData);
         break;
       case 'illegal_transport':
-        setTransportFormData({
+        console.log('Setting illegal_transport form data');
+        const transportFormData = useStoredFormData && draft.formData ? {
+          ...baseData,
+          ...draft.formData
+        } : {
           ...baseData,
           violationType: draft.transportData?.violationType || '',
           documentType: draft.transportData?.documentType || '',
@@ -1377,102 +1594,176 @@ export default function Reports() {
           driverAddress: draft.transportData?.driver?.address || '',
           sourceOfMaterials: draft.transportData?.sourceOfMaterials || '',
           actionsTaken: draft.transportData?.actionsTaken || ''
-        });
+        };
+        console.log('Transport form data to set:', transportFormData);
+        setTransportFormData(transportFormData);
         break;
       case 'illegal_processing':
-        setProcessingFormData({
+        console.log('Setting illegal_processing form data');
+        const processingFormData = useStoredFormData && draft.formData ? {
           ...baseData,
-          violationType: draft.processingData?.violationType || '',
-          documentType: draft.processingData?.documentType || '',
-          volumeWeight: draft.processingData?.materialInfo?.volumeWeight || '',
-          unit: draft.processingData?.materialInfo?.unit || '',
-          processingMethod: draft.processingData?.processingMethod || '',
-          equipmentUsed: draft.processingData?.equipmentUsed || '',
-          ownerName: draft.processingData?.ownerOperator?.name || '',
-          ownerAddress: draft.processingData?.ownerOperator?.address || '',
-          sourceOfMaterials: draft.processingData?.sourceOfMaterials || '',
-          actionsTaken: draft.processingData?.actionsTaken || ''
-        });
+          ...draft.formData
+        } : {
+          ...baseData,
+          facilityType: draft.processingData?.facilityType || '',
+          processingProducts: draft.processingData?.processingProducts || '',
+          operatorName: draft.processingData?.ownerOperator?.name || '',
+          operatorAddress: draft.processingData?.ownerOperator?.address || '',
+          operatorDetermination: draft.processingData?.operatorDetermination || '',
+          rawMaterialsName: draft.processingData?.rawMaterialsName || '',
+          rawMaterialsLocation: draft.processingData?.rawMaterialsLocation || '',
+          rawMaterialsDetermination: draft.processingData?.rawMaterialsDetermination || ''
+        };
+        console.log('Processing form data to set:', processingFormData);
+        setProcessingFormData(processingFormData);
         break;
       case 'illegal_trading':
-        setTradingFormData({
+        console.log('Setting illegal_trading form data');
+        const tradingFormData = useStoredFormData && draft.formData ? {
           ...baseData,
-          violationType: draft.tradingData?.violationType || '',
-          documentType: draft.tradingData?.documentType || '',
-          volumeWeight: draft.tradingData?.materialInfo?.volumeWeight || '',
-          unit: draft.tradingData?.materialInfo?.unit || '',
-          tradingMethod: draft.tradingData?.tradingMethod || '',
-          buyerName: draft.tradingData?.buyer?.name || '',
-          buyerAddress: draft.tradingData?.buyer?.address || '',
-          sellerName: draft.tradingData?.seller?.name || '',
-          sellerAddress: draft.tradingData?.seller?.address || '',
-          sourceOfMaterials: draft.tradingData?.sourceOfMaterials || '',
-          actionsTaken: draft.tradingData?.actionsTaken || ''
-        });
+          ...draft.formData
+        } : {
+          ...baseData,
+          violationType: draft.tradingData?.violationType || 'tradingViolation',
+          businessName: draft.tradingData?.businessName || '',
+          businessOwner: draft.tradingData?.businessOwner || '',
+          businessLocation: draft.tradingData?.businessLocation || '',
+          sourceOfCommodityName: draft.tradingData?.sourceOfCommodityName || '',
+          sourceOfCommodityLocation: draft.tradingData?.sourceOfCommodityLocation || '',
+          sourceOfCommodityDetermination: draft.tradingData?.sourceOfCommodityDetermination || '',
+          stockpiledMaterials: draft.tradingData?.stockpiledMaterials || '',
+          dtiRegistration: draft.tradingData?.dtiRegistration || ''
+        };
+        console.log('Trading form data to set:', tradingFormData);
+        setTradingFormData(tradingFormData);
         break;
       case 'illegal_exploration':
-        setExplorationFormData({
+        console.log('Setting illegal_exploration form data');
+        const explorationFormData = {
           ...baseData,
-          activities: {
-            drilling: draft.explorationData?.activities?.drilling || false,
-            testPitting: draft.explorationData?.activities?.testPitting || false,
-            trenching: draft.explorationData?.activities?.trenching || false,
-            shaftSinking: draft.explorationData?.activities?.shaftSinking || false,
-            tunneling: draft.explorationData?.activities?.tunneling || false,
-            others: draft.explorationData?.activities?.others || false
-          },
-          othersActivity: draft.explorationData?.othersActivity || '',
-          violationType: draft.explorationData?.violationType || '',
-          documentType: draft.explorationData?.documentType || '',
-          explorationMethod: draft.explorationData?.explorationMethod || '',
-          equipmentUsed: draft.explorationData?.equipmentUsed || '',
-          areaSize: draft.explorationData?.areaSize || '',
-          ownerName: draft.explorationData?.ownerOperator?.name || '',
-          ownerAddress: draft.explorationData?.ownerOperator?.address || '',
-          actionsTaken: draft.explorationData?.actionsTaken || ''
-        });
+          activities: useStoredFormData ? 
+            (draft.formData.activities || {
+              drilling: false,
+              testPitting: false,
+              trenching: false,
+              shaftSinking: false,
+              tunneling: false,
+              others: false
+            }) : {
+              drilling: draft.explorationData?.activities?.drilling || false,
+              testPitting: draft.explorationData?.activities?.testPitting || false,
+              trenching: draft.explorationData?.activities?.trenching || false,
+              shaftSinking: draft.explorationData?.activities?.shaftSinking || false,
+              tunneling: draft.explorationData?.activities?.tunneling || false,
+              others: draft.explorationData?.activities?.others || false
+            },
+          othersActivity: useStoredFormData ? 
+            (draft.formData.othersActivity || '') :
+            (draft.explorationData?.othersActivity || ''),
+          operatorName: useStoredFormData ? 
+            (draft.formData.operatorName || '') :
+            (draft.explorationData?.ownerOperator?.name || ''),
+          operatorAddress: useStoredFormData ? 
+            (draft.formData.operatorAddress || '') :
+            (draft.explorationData?.ownerOperator?.address || ''),
+          operatorDetermination: useStoredFormData ? 
+            (draft.formData.operatorDetermination || '') :
+            (draft.explorationData?.operatorDetermination || '')
+        };
+        console.log('Exploration form data to set:', explorationFormData);
+        setExplorationFormData(explorationFormData);
         break;
       case 'illegal_smallscale':
-        setSmallScaleMiningFormData({
+        console.log('Setting illegal_smallscale form data');
+        const smallScaleFormData = {
           ...baseData,
-          activities: {
-            extraction: draft.smallScaleData?.activities?.extraction || false,
-            disposition: draft.smallScaleData?.activities?.disposition || false,
-            mineralProcessing: draft.smallScaleData?.activities?.mineralProcessing || false,
-            tunneling: draft.smallScaleData?.activities?.tunneling || false,
-            shaftSinking: draft.smallScaleData?.activities?.shaftSinking || false,
-            goldPanning: draft.smallScaleData?.activities?.goldPanning || false,
-            amalgamation: draft.smallScaleData?.activities?.amalgamation || false,
-            others: draft.smallScaleData?.activities?.others || false
-          },
-          equipmentUsed: {
-            extraction: draft.smallScaleData?.equipmentUsed?.extraction || '',
-            disposition: draft.smallScaleData?.equipmentUsed?.disposition || '',
-            mineralProcessing: draft.smallScaleData?.equipmentUsed?.mineralProcessing || ''
-          },
-          othersActivity: draft.smallScaleData?.othersActivity || '',
-          observations: {
-            excavations: draft.smallScaleData?.observations?.excavations || false,
-            stockpiles: draft.smallScaleData?.observations?.stockpiles || false,
-            tunnels: draft.smallScaleData?.observations?.tunnels || false,
-            mineShafts: draft.smallScaleData?.observations?.mineShafts || false,
-            accessRoad: draft.smallScaleData?.observations?.accessRoad || false,
-            processingFacility: draft.smallScaleData?.observations?.processingFacility || false
-          },
-          interviewConducted: draft.smallScaleData?.interview?.conducted || false,
-          guideQuestions: {
-            question1: draft.smallScaleData?.interview?.responses?.question1 || '',
-            question2: draft.smallScaleData?.interview?.responses?.question2 || '',
-            question3: draft.smallScaleData?.interview?.responses?.question3 || '',
-            question4: draft.smallScaleData?.interview?.responses?.question4 || '',
-            question5: draft.smallScaleData?.interview?.responses?.question5 || '',
-            question6: draft.smallScaleData?.interview?.responses?.question6 || ''
-          }
-        });
+          activities: useStoredFormData ? 
+            (draft.formData.activities || {
+              extraction: false,
+              disposition: false,
+              mineralProcessing: false,
+              tunneling: false,
+              shaftSinking: false,
+              goldPanning: false,
+              amalgamation: false,
+              others: false
+            }) : {
+              extraction: draft.smallScaleData?.activities?.extraction || false,
+              disposition: draft.smallScaleData?.activities?.disposition || false,
+              mineralProcessing: draft.smallScaleData?.activities?.mineralProcessing || false,
+              tunneling: draft.smallScaleData?.activities?.tunneling || false,
+              shaftSinking: draft.smallScaleData?.activities?.shaftSinking || false,
+              goldPanning: draft.smallScaleData?.activities?.goldPanning || false,
+              amalgamation: draft.smallScaleData?.activities?.amalgamation || false,
+              others: draft.smallScaleData?.activities?.others || false
+            },
+          equipmentUsed: useStoredFormData ? 
+            (draft.formData.equipmentUsed || {
+              extraction: '',
+              disposition: '',
+              mineralProcessing: ''
+            }) : {
+              extraction: draft.smallScaleData?.equipmentUsed?.extraction || '',
+              disposition: draft.smallScaleData?.equipmentUsed?.disposition || '',
+              mineralProcessing: draft.smallScaleData?.equipmentUsed?.mineralProcessing || ''
+            },
+          othersActivity: useStoredFormData ? 
+            (draft.formData.othersActivity || '') :
+            (draft.smallScaleData?.othersActivity || ''),
+          observations: useStoredFormData ? 
+            (draft.formData.observations || {
+              excavations: false,
+              stockpiles: false,
+              tunnels: false,
+              mineShafts: false,
+              accessRoad: false,
+              processingFacility: false
+            }) : {
+              excavations: draft.smallScaleData?.observations?.excavations || false,
+              stockpiles: draft.smallScaleData?.observations?.stockpiles || false,
+              tunnels: draft.smallScaleData?.observations?.tunnels || false,
+              mineShafts: draft.smallScaleData?.observations?.mineShafts || false,
+              accessRoad: draft.smallScaleData?.observations?.accessRoad || false,
+              processingFacility: draft.smallScaleData?.observations?.processingFacility || false
+            },
+          interviewConducted: useStoredFormData ? 
+            (draft.formData.interviewConducted || false) :
+            (draft.smallScaleData?.interview?.conducted || false),
+          guideQuestions: useStoredFormData ? 
+            (draft.formData.guideQuestions || {
+              question1: '',
+              question2: '',
+              question3: '',
+              question4: '',
+              question5: '',
+              question6: ''
+            }) : {
+              question1: draft.smallScaleData?.interview?.responses?.question1 || '',
+              question2: draft.smallScaleData?.interview?.responses?.question2 || '',
+              question3: draft.smallScaleData?.interview?.responses?.question3 || '',
+              question4: draft.smallScaleData?.interview?.responses?.question4 || '',
+              question5: draft.smallScaleData?.interview?.responses?.question5 || '',
+              question6: draft.smallScaleData?.interview?.responses?.question6 || ''
+            }
+        };
+        console.log('Small-scale form data to set:', smallScaleFormData);
+        setSmallScaleMiningFormData(smallScaleFormData);
         break;
       default:
-        setFormData(baseData);
+        console.warn('Unknown report type:', draftType);
+        console.log('Available form data:', draft.formData);
+        // For unknown types, try to use stored form data if available
+        if (useStoredFormData && draft.formData) {
+          setFormData({
+            ...baseData,
+            ...draft.formData
+          });
+        } else {
+          setFormData(baseData);
+        }
     }
+    
+    console.log('Form population completed for:', draftType);
 
     // Set uploaded images if any
     if (draft.attachments && draft.attachments.length > 0) {
@@ -1496,10 +1787,14 @@ export default function Reports() {
     setIsLoadingLocation(true);
     try {
       const coordinates = await locationService.getCurrentLocation();
-      updateFormData('latitude', coordinates.latitude.toString());
-      updateFormData('longitude', coordinates.longitude.toString());
+      if (coordinates) {
+        updateFormData('latitude', coordinates.latitude.toString());
+        updateFormData('longitude', coordinates.longitude.toString());
+      } else {
+        Alert.alert('Error', 'Unable to get location coordinates. Please try again.');
+      }
     } catch (error) {
-      Alert.alert('Error', error.message);
+      Alert.alert('Error', error.message || 'Failed to get current location');
     } finally {
       setIsLoadingLocation(false);
     }
@@ -1527,10 +1822,14 @@ export default function Reports() {
     setIsLoadingTransportationLocation(true);
     try {
       const coordinates = await locationService.getCurrentLocation();
-      updateTransportationFormData('latitude', coordinates.latitude.toString());
-      updateTransportationFormData('longitude', coordinates.longitude.toString());
+      if (coordinates) {
+        updateTransportFormData('latitude', coordinates.latitude.toString());
+        updateTransportFormData('longitude', coordinates.longitude.toString());
+      } else {
+        Alert.alert('Error', 'Unable to get location coordinates. Please try again.');
+      }
     } catch (error) {
-      Alert.alert('Error', error.message);
+      Alert.alert('Error', error.message || 'Failed to get current location');
     } finally {
       setIsLoadingTransportationLocation(false);
     }
@@ -1548,8 +1847,8 @@ export default function Reports() {
       minute: '2-digit',
       hour12: true
     });
-    updateTransportationFormData('date', date);
-    updateTransportationFormData('time', time);
+    updateTransportFormData('date', date);
+    updateTransportFormData('time', time);
   };
 
   // Processing form handlers
@@ -1557,10 +1856,14 @@ export default function Reports() {
     setIsLoadingProcessingLocation(true);
     try {
       const coordinates = await locationService.getCurrentLocation();
-      updateProcessingFormData('latitude', coordinates.latitude.toString());
-      updateProcessingFormData('longitude', coordinates.longitude.toString());
+      if (coordinates) {
+        updateProcessingFormData('latitude', coordinates.latitude.toString());
+        updateProcessingFormData('longitude', coordinates.longitude.toString());
+      } else {
+        Alert.alert('Error', 'Unable to get location coordinates. Please try again.');
+      }
     } catch (error) {
-      Alert.alert('Error', error.message);
+      Alert.alert('Error', error.message || 'Failed to get current location');
     } finally {
       setIsLoadingProcessingLocation(false);
     }
@@ -1587,10 +1890,14 @@ export default function Reports() {
     setIsLoadingTradingLocation(true);
     try {
       const coordinates = await locationService.getCurrentLocation();
-      updateTradingFormData('latitude', coordinates.latitude.toString());
-      updateTradingFormData('longitude', coordinates.longitude.toString());
+      if (coordinates) {
+        updateTradingFormData('latitude', coordinates.latitude.toString());
+        updateTradingFormData('longitude', coordinates.longitude.toString());
+      } else {
+        Alert.alert('Error', 'Unable to get location coordinates. Please try again.');
+      }
     } catch (error) {
-      Alert.alert('Error', error.message);
+      Alert.alert('Error', error.message || 'Failed to get current location');
     } finally {
       setIsLoadingTradingLocation(false);
     }
@@ -1617,10 +1924,14 @@ export default function Reports() {
     setIsLoadingExplorationLocation(true);
     try {
       const coordinates = await locationService.getCurrentLocation();
-      updateExplorationFormData('latitude', coordinates.latitude.toString());
-      updateExplorationFormData('longitude', coordinates.longitude.toString());
+      if (coordinates) {
+        updateExplorationFormData('latitude', coordinates.latitude.toString());
+        updateExplorationFormData('longitude', coordinates.longitude.toString());
+      } else {
+        Alert.alert('Error', 'Unable to get location coordinates. Please try again.');
+      }
     } catch (error) {
-      Alert.alert('Error', error.message);
+      Alert.alert('Error', error.message || 'Failed to get current location');
     } finally {
       setIsLoadingExplorationLocation(false);
     }
@@ -1647,10 +1958,14 @@ export default function Reports() {
     setIsLoadingSmallScaleMiningLocation(true);
     try {
       const coordinates = await locationService.getCurrentLocation();
-      updateSmallScaleMiningFormData('latitude', coordinates.latitude.toString());
-      updateSmallScaleMiningFormData('longitude', coordinates.longitude.toString());
+      if (coordinates) {
+        updateSmallScaleMiningFormData('latitude', coordinates.latitude.toString());
+        updateSmallScaleMiningFormData('longitude', coordinates.longitude.toString());
+      } else {
+        Alert.alert('Error', 'Unable to get location coordinates. Please try again.');
+      }
     } catch (error) {
-      Alert.alert('Error', error.message);
+      Alert.alert('Error', error.message || 'Failed to get current location');
     } finally {
       setIsLoadingSmallScaleMiningLocation(false);
     }
@@ -1928,7 +2243,7 @@ export default function Reports() {
         // If this was a draft being submitted, delete it from drafts
         if (isEditingMode && editingDraft) {
           try {
-            await reportService.deleteDraft(editingDraft._id);
+            await asyncStorageDraftService.deleteDraft(editingDraft.id || editingDraft._id);
             console.log('Draft deleted successfully after submission');
           } catch (deleteError) {
             console.error('Error deleting draft after submission:', deleteError);
@@ -2087,7 +2402,7 @@ export default function Reports() {
           </Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.imageScrollView}>
             {uploadedImages.map((image, index) => (
-              <View key={index} style={styles.imagePreviewItem}>
+              <View key={image.id || `image_${index}_${Date.now()}`} style={styles.imagePreviewItem}>
                 <TouchableOpacity
                   onPress={() => openImagePreview(uploadedImages, index)}
                   style={styles.imagePreviewTouchable}
@@ -2363,7 +2678,9 @@ export default function Reports() {
   };
 
   const ReportCard = ({ item, index }) => {
-    const categoryTitle = getReportTypeTitle(item.reportType);
+    // Use item.type for drafts, item.reportType for reports
+    const reportType = item.type || item.reportType;
+    const categoryTitle = getReportTypeTitle(reportType);
     const isDraft = activeTab === 'drafts' || item.status === 'draft';
     
     const handleCardPress = () => {
@@ -2558,7 +2875,7 @@ export default function Reports() {
                   <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.attachmentScrollView}>
                     {selectedReport.attachments.map((attachment, index) => (
                       <TouchableOpacity
-                        key={index}
+                        key={attachment.id || `attachment_${index}_${attachment.url || index}`}
                         style={styles.attachmentThumbnail}
                         onPress={() => openImagePreview(selectedReport.attachments, index)}
                       >
@@ -2686,7 +3003,7 @@ export default function Reports() {
                   <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.attachmentScrollView}>
                     {selectedDraft.attachments.map((attachment, index) => (
                       <TouchableOpacity
-                        key={index}
+                        key={attachment.id || `draft_attachment_${index}_${attachment.url || index}`}
                         style={styles.attachmentThumbnail}
                         onPress={() => openImagePreview(selectedDraft.attachments, index)}
                       >
@@ -3176,7 +3493,7 @@ export default function Reports() {
               </Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.imageScrollView}>
                 {uploadedImages.map((image, index) => (
-                  <View key={index} style={styles.imagePreviewItem}>
+                  <View key={image.id || `mining_image_${index}_${Date.now()}`} style={styles.imagePreviewItem}>
                     <Image source={{ uri: image.url }} style={styles.imagePreview} />
                     <TouchableOpacity
                       style={styles.removeImageButton}
@@ -3520,8 +3837,20 @@ export default function Reports() {
               </Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.imageScrollView}>
                 {uploadedImages.map((image, index) => (
-                  <View key={index} style={styles.imagePreviewItem}>
-                    <Image source={{ uri: image.url }} style={styles.imagePreview} />
+                  <View key={image.id || `transport_image_${index}_${Date.now()}`} style={styles.imagePreviewItem}>
+                    <TouchableOpacity
+                      onPress={() => openImagePreview(uploadedImages, index)}
+                      style={styles.imagePreviewTouchable}
+                    >
+                      <Image 
+                        source={{ uri: image.url || image.uri || image.preview }} 
+                        style={styles.imagePreview}
+                        onError={(error) => console.log('Image load error:', error)}
+                      />
+                      <View style={styles.imagePreviewOverlayIcon}>
+                        <Ionicons name="eye" size={16} color="white" />
+                      </View>
+                    </TouchableOpacity>
                     <TouchableOpacity
                       style={styles.removeImageButton}
                       onPress={() => handleRemoveImage(index)}
@@ -3842,8 +4171,20 @@ export default function Reports() {
               </Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.imageScrollView}>
                 {uploadedImages.map((image, index) => (
-                  <View key={index} style={styles.imagePreviewItem}>
-                    <Image source={{ uri: image.url }} style={styles.imagePreview} />
+                  <View key={image.id || `processing_image_${index}_${Date.now()}`} style={styles.imagePreviewItem}>
+                    <TouchableOpacity
+                      onPress={() => openImagePreview(uploadedImages, index)}
+                      style={styles.imagePreviewTouchable}
+                    >
+                      <Image 
+                        source={{ uri: image.url || image.uri || image.preview }} 
+                        style={styles.imagePreview}
+                        onError={(error) => console.log('Image load error:', error)}
+                      />
+                      <View style={styles.imagePreviewOverlayIcon}>
+                        <Ionicons name="eye" size={16} color="white" />
+                      </View>
+                    </TouchableOpacity>
                     <TouchableOpacity
                       style={styles.removeImageButton}
                       onPress={() => handleRemoveImage(index)}
@@ -4129,8 +4470,8 @@ export default function Reports() {
 
       {/* Additional Information */}
       <View style={styles.checklistSection}>
-        <Text style={styles.sectionLabel}>{td.additionalInfo}</Text>
-        <TextInput 
+        <Text style={styles.checklistLabel}>{td.additionalInfo}</Text>
+        <TextInput
           style={[styles.textInput, styles.textArea]}
           multiline
           value={tradingFormData.additionalInfo}
@@ -4150,34 +4491,46 @@ export default function Reports() {
           <TouchableOpacity style={styles.cameraButton}>
             <Text style={styles.cameraText}>{td.useCamera}</Text>
           </TouchableOpacity>
-          {uploadedImages.length > 0 && (
-            <View style={styles.imagePreviewContainer}>
-              <Text style={styles.imagePreviewTitle}>
-                {language === 'english' 
-                  ? `Uploaded Images (${uploadedImages.length})` 
-                  : `Mga Na-upload na Larawan (${uploadedImages.length})`
-                }
-              </Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.imageScrollView}>
-                {uploadedImages.map((image, index) => (
-                  <View key={index} style={styles.imagePreviewItem}>
-                    <Image source={{ uri: image.url }} style={styles.imagePreview} />
-                    <TouchableOpacity
-                      style={styles.removeImageButton}
-                      onPress={() => handleRemoveImage(index)}
-                    >
-                      <Ionicons name="close-circle" size={24} color="#ff4444" />
-                    </TouchableOpacity>
-                    {image.geotagged && (
-                      <View style={styles.geotaggedIndicator}>
-                        <Ionicons name="location" size={12} color="white" />
-                      </View>
-                    )}
-                  </View>
-                ))}
-              </ScrollView>
-            </View>
-          )}
+            {uploadedImages.length > 0 && (
+              <View style={styles.imagePreviewContainer}>
+                <Text style={styles.imagePreviewTitle}>
+                  {language === 'english' 
+                    ? `Uploaded Images (${uploadedImages.length})` 
+                    : `Mga Na-upload na Larawan (${uploadedImages.length})`
+                  }
+                </Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.imageScrollView}>
+                  {uploadedImages.map((image, index) => (
+                    <View key={image.id || `mining_image_${index}_${Date.now()}`} style={styles.imagePreviewItem}>
+                      <TouchableOpacity
+                        onPress={() => openImagePreview(uploadedImages, index)}
+                        style={styles.imagePreviewTouchable}
+                      >
+                        <Image 
+                          source={{ uri: image.url || image.uri || image.preview }} 
+                          style={styles.imagePreview}
+                          onError={(error) => console.log('Image load error:', error)}
+                        />
+                        <View style={styles.imagePreviewOverlayIcon}>
+                          <Ionicons name="eye" size={16} color="white" />
+                        </View>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={styles.removeImageButton}
+                        onPress={() => handleRemoveImage(index)}
+                      >
+                        <Ionicons name="close-circle" size={24} color="#ff4444" />
+                      </TouchableOpacity>
+                      {image.geotagged && (
+                        <View style={styles.geotaggedIndicator}>
+                          <Ionicons name="location" size={12} color="white" />
+                        </View>
+                      )}
+                    </View>
+                  ))}
+                </ScrollView>
+              </View>
+            )}
         </View>
       </View>
 
@@ -4453,8 +4806,20 @@ export default function Reports() {
               </Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.imageScrollView}>
                 {uploadedImages.map((image, index) => (
-                  <View key={index} style={styles.imagePreviewItem}>
-                    <Image source={{ uri: image.url }} style={styles.imagePreview} />
+                  <View key={image.id || `exploration_image_${index}_${Date.now()}`} style={styles.imagePreviewItem}>
+                    <TouchableOpacity
+                      onPress={() => openImagePreview(uploadedImages, index)}
+                      style={styles.imagePreviewTouchable}
+                    >
+                      <Image 
+                        source={{ uri: image.url || image.uri || image.preview }} 
+                        style={styles.imagePreview}
+                        onError={(error) => console.log('Image load error:', error)}
+                      />
+                      <View style={styles.imagePreviewOverlayIcon}>
+                        <Ionicons name="eye" size={16} color="white" />
+                      </View>
+                    </TouchableOpacity>
                     <TouchableOpacity
                       style={styles.removeImageButton}
                       onPress={() => handleRemoveImage(index)}
@@ -4987,8 +5352,20 @@ export default function Reports() {
               </Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.imageScrollView}>
                 {uploadedImages.map((image, index) => (
-                  <View key={index} style={styles.imagePreviewItem}>
-                    <Image source={{ uri: image.url }} style={styles.imagePreview} />
+                  <View key={image.id || `smallscale_image_${index}_${Date.now()}`} style={styles.imagePreviewItem}>
+                    <TouchableOpacity
+                      onPress={() => openImagePreview(uploadedImages, index)}
+                      style={styles.imagePreviewTouchable}
+                    >
+                      <Image 
+                        source={{ uri: image.url || image.uri || image.preview }} 
+                        style={styles.imagePreview}
+                        onError={(error) => console.log('Image load error:', error)}
+                      />
+                      <View style={styles.imagePreviewOverlayIcon}>
+                        <Ionicons name="eye" size={16} color="white" />
+                      </View>
+                    </TouchableOpacity>
                     <TouchableOpacity
                       style={styles.removeImageButton}
                       onPress={() => handleRemoveImage(index)}
@@ -5174,7 +5551,7 @@ export default function Reports() {
               <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                 {currentImages.map((image, index) => (
                   <TouchableOpacity
-                    key={index}
+                    key={image.id || `preview_${index}_${image.url || image.uri || index}`}
                     style={[
                       styles.thumbnailStripItem,
                       index === selectedImageIndex && styles.activeThumbnail
@@ -5299,7 +5676,7 @@ export default function Reports() {
       ) : (
         <FlatList
           data={getFilteredData()}
-          keyExtractor={(item) => item._id || item.reportId}
+          keyExtractor={(item, index) => item._id || item.reportId || item.draftId || `item_${index}`}
           renderItem={({ item, index }) => <ReportCard item={item} index={index} />}
           contentContainerStyle={styles.listContainer}
           showsVerticalScrollIndicator={false}

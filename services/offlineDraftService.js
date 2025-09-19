@@ -1,5 +1,5 @@
 import NetInfo from '@react-native-community/netinfo';
-import sqliteService from './sqliteService';
+import asyncStorageService from './asyncStorageService';
 import reportService from './reportService';
 
 class OfflineDraftService {
@@ -121,10 +121,12 @@ class OfflineDraftService {
       let offlineDrafts = [];
 
       // Always get offline drafts
-      const offlineResult = await sqliteService.getOfflineDrafts(reporterId);
-      if (offlineResult.success) {
-        offlineDrafts = offlineResult.data;
-      }
+      offlineDrafts = await asyncStorageService.getDrafts(reporterId);
+      // Mark offline drafts
+      offlineDrafts = offlineDrafts.map(draft => ({
+        ...draft,
+        isOffline: true
+      }));
 
       // Try to get online drafts if connected
       if (networkStatus.isOnline) {
@@ -174,7 +176,8 @@ class OfflineDraftService {
 
       if (isOfflineDraft) {
         // Always delete offline drafts locally
-        return await sqliteService.deleteOfflineDraft(draftId);
+        const success = await asyncStorageService.deleteDraft(draftId);
+        return { success };
       } else if (networkStatus.isOnline) {
         // Try to delete online draft
         try {
@@ -201,13 +204,9 @@ class OfflineDraftService {
   // Private methods for offline operations
   async saveOfflineDraft(draftData) {
     try {
-      const result = await sqliteService.saveOfflineDraft(draftData);
-      if (result.success) {
-        console.log('✅ Draft saved offline successfully');
-        return { success: true, isOffline: true, draftId: result.draftId };
-      } else {
-        throw new Error(result.error || 'Offline save failed');
-      }
+      const draft = await asyncStorageService.saveDraft(draftData);
+      console.log('✅ Draft saved offline successfully');
+      return { success: true, isOffline: true, draftId: draft.id };
     } catch (error) {
       console.error('❌ Error saving offline draft:', error);
       return { success: false, error: error.message };
@@ -216,13 +215,9 @@ class OfflineDraftService {
 
   async updateOfflineDraft(draftId, draftData) {
     try {
-      const result = await sqliteService.updateOfflineDraft(draftId, draftData);
-      if (result.success) {
-        console.log('✅ Draft updated offline successfully');
-        return { success: true, isOffline: true };
-      } else {
-        throw new Error(result.error || 'Offline update failed');
-      }
+      const updatedDraft = await asyncStorageService.saveDraft({ ...draftData, id: draftId });
+      console.log('✅ Draft updated offline successfully');
+      return { success: true, isOffline: true };
     } catch (error) {
       console.error('❌ Error updating offline draft:', error);
       return { success: false, error: error.message };
@@ -238,7 +233,7 @@ class OfflineDraftService {
         return { success: false, error: 'Device is offline' };
       }
 
-      const unsyncedDrafts = await sqliteService.getUnsyncedDrafts(reporterId);
+      const unsyncedDrafts = await asyncStorageService.getUnsyncedDrafts();
       if (unsyncedDrafts.length === 0) {
         console.log('✅ No drafts to sync');
         return { success: true, syncedCount: 0 };
@@ -271,17 +266,17 @@ class OfflineDraftService {
           // Save to MongoDB
           const result = await reportService.saveDraft(draftData);
           if (result.success) {
-            // Mark as synced in SQLite
-            await sqliteService.markDraftAsSynced(draft.draftId, result.data?._id);
+            // Mark as synced in AsyncStorage
+            await asyncStorageService.markDraftAsSynced(draft.id);
             syncedCount++;
-            console.log(`✅ Synced draft ${draft.draftId}`);
+            console.log(`✅ Synced draft ${draft.id}`);
           } else {
             failedCount++;
-            console.error(`❌ Failed to sync draft ${draft.draftId}:`, result.message);
+            console.error(`❌ Failed to sync draft ${draft.id}:`, result.message);
           }
         } catch (syncError) {
           failedCount++;
-          console.error(`❌ Error syncing draft ${draft.draftId}:`, syncError.message);
+          console.error(`❌ Error syncing draft ${draft.id}:`, syncError.message);
         }
       }
 
@@ -301,7 +296,7 @@ class OfflineDraftService {
   // Get sync status for UI
   async getSyncStatus(reporterId) {
     try {
-      const unsyncedDrafts = await sqliteService.getUnsyncedDrafts(reporterId);
+      const unsyncedDrafts = await asyncStorageService.getUnsyncedDrafts();
       const networkStatus = await this.getNetworkStatus();
       
       return {
@@ -318,13 +313,9 @@ class OfflineDraftService {
   // Clear all offline data
   async clearOfflineData() {
     try {
-      const result = await sqliteService.clearAllOfflineDrafts();
-      if (result.success) {
-        console.log('🗑️ All offline drafts cleared');
-        return { success: true };
-      } else {
-        throw new Error(result.error || 'Failed to clear offline data');
-      }
+      await asyncStorageService.removeItem(asyncStorageService.storageKeys.REPORT_DRAFTS);
+      console.log('🗑️ All offline drafts cleared');
+      return { success: true };
     } catch (error) {
       console.error('❌ Error clearing offline data:', error);
       return { success: false, error: error.message };

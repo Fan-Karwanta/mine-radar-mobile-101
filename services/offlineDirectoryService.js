@@ -1,5 +1,5 @@
 import { API_URL } from '../constants/api';
-import sqliteService from './sqliteService';
+import asyncStorageService from './asyncStorageService';
 import NetInfo from '@react-native-community/netinfo';
 
 class OfflineDirectoryService {
@@ -62,9 +62,9 @@ class OfflineDirectoryService {
 
       console.log('Starting directory data download...');
       
-      // Force recreate all tables ONCE at the beginning to ensure no UNIQUE constraints
-      console.log('🔧 Ensuring all tables have no UNIQUE constraints before download...');
-      await sqliteService.forceRecreateTablesWithoutConstraints();
+      // Initialize AsyncStorage service
+      console.log('🔧 Initializing AsyncStorage service...');
+      await asyncStorageService.init();
       
       // Reset progress
       this.downloadProgress = { national: 0, local: 0, hotspots: 0, overall: 0 };
@@ -128,14 +128,18 @@ class OfflineDirectoryService {
       }
       
       console.log('🎉 All directory data downloaded successfully');
-      const storageInfo = await sqliteService.getStorageInfo();
+      const storageInfo = await asyncStorageService.getStorageInfo();
       
-      // Final verification - check SQLite storage
-      console.log('💾 SQLite Storage Verification:');
-      console.log(`  Total records in SQLite: ${storageInfo.total}`);
-      console.log(`  National in SQLite: ${storageInfo.national || 0}`);
-      console.log(`  Local in SQLite: ${storageInfo.local || 0}`);
-      console.log(`  Hotspots in SQLite: ${storageInfo.hotspots || 0}`);
+      // Final verification - check AsyncStorage
+      console.log('💾 AsyncStorage Verification:');
+      const nationalCount = storageInfo.national?.count || 0;
+      const localCount = storageInfo.local?.count || 0;
+      const hotspotsCount = storageInfo.hotspots?.count || 0;
+      const totalCount = nationalCount + localCount + hotspotsCount;
+      console.log(`  Total records in AsyncStorage: ${totalCount}`);
+      console.log(`  National in AsyncStorage: ${nationalCount}`);
+      console.log(`  Local in AsyncStorage: ${localCount}`);
+      console.log(`  Hotspots in AsyncStorage: ${hotspotsCount}`);
       
       const downloadDetails = {
         national: successfulDownloads[0]?.totalDownloaded || successfulDownloads[0]?.data?.length || 0,
@@ -159,15 +163,15 @@ class OfflineDirectoryService {
       console.log(`  📊 National: ${downloadDetails.national} records from MongoDB`);
       console.log(`  📊 Local: ${downloadDetails.local} records from MongoDB`);
       console.log(`  📊 Hotspots: ${downloadDetails.hotspots} records from MongoDB`);
-      console.log(`  📱 Total: ${totalDownloadedFromMongoDB} records saved to SQLite`);
+      console.log(`  📱 Total: ${totalDownloadedFromMongoDB} records saved to AsyncStorage`);
       console.log(`  🎉 SUCCESS: All ${totalSavedToSQLite} MongoDB records captured offline!`);
-      console.log(`  📊 Actual SQLite Total: ${storageInfo.total} records`);
+      console.log(`  📊 Actual AsyncStorage Total: ${totalCount} records`);
       
       if (totalDuplicates > 0) {
         console.log('🔄 Duplicate MongoDB IDs Summary:');
         console.log(`  📊 Total Duplicate MongoDB IDs: ${totalDuplicates}`);
         console.log(`  📊 Unique MongoDB IDs: ${totalUniqueMongoIds}`);
-        console.log(`  💾 All ${totalSavedToSQLite} records saved to SQLite (including duplicates)`);
+        console.log(`  💾 All ${totalSavedToSQLite} records saved to AsyncStorage (including duplicates)`);
       }
       
       return {
@@ -193,7 +197,7 @@ class OfflineDirectoryService {
       return {
         success: false,
         error: error.message,
-        stats: await sqliteService.getStorageInfo()
+        stats: await asyncStorageService.getStorageInfo()
       };
     }
   }
@@ -281,8 +285,9 @@ class OfflineDirectoryService {
         }
       }
 
-      // Save to SQLite
-      const saveResult = await sqliteService.saveDirectoryData(category, allRecords);
+      // Save to AsyncStorage
+      const tableName = `directory_${category}`;
+      const saveResult = await asyncStorageService.saveDirectoryRecords(tableName, allRecords);
       
       this.downloadProgress[category] = 100;
       this.notifyProgressUpdate();
@@ -334,31 +339,50 @@ class OfflineDirectoryService {
   async getDirectoryData(category, params = {}) {
     try {
       const isOnline = await this.checkOnlineStatus();
-      const hasOfflineData = await sqliteService.isDataDownloaded(`directory_${category}`);
+      const offlineData = await asyncStorageService.getDirectoryRecords(`directory_${category}`, { limit: 1 });
+      const hasOfflineData = offlineData && offlineData.total > 0;
 
       if (isOnline && !hasOfflineData) {
         // Online and no offline data - fetch from server
         return await this.getOnlineDirectoryData(category, params);
       } else if (!isOnline && hasOfflineData) {
-        // Offline but has cached data - use SQLite with pagination for performance
+        // Offline but has cached data - use AsyncStorage with pagination for performance
         const offlineParams = { 
           ...params,
-          // Enable pagination for offline data to improve performance
-          forcePagination: true,
           limit: params.limit || 20,
           page: params.page || 1
         };
-        return await sqliteService.getDirectoryData(category, offlineParams);
+        const result = await asyncStorageService.getDirectoryRecords(`directory_${category}`, offlineParams);
+        return {
+          success: true,
+          data: result.records,
+          pagination: {
+            currentPage: result.page,
+            totalPages: Math.ceil(result.total / result.limit),
+            totalRecords: result.total,
+            hasNext: result.hasMore,
+            limit: result.limit
+          }
+        };
       } else if (isOnline && hasOfflineData) {
         // Online with cached data - prefer cached for speed with pagination
         const offlineParams = { 
           ...params,
-          // Enable pagination for better performance
-          forcePagination: true,
           limit: params.limit || 20,
           page: params.page || 1
         };
-        return await sqliteService.getDirectoryData(category, offlineParams);
+        const result = await asyncStorageService.getDirectoryRecords(`directory_${category}`, offlineParams);
+        return {
+          success: true,
+          data: result.records,
+          pagination: {
+            currentPage: result.page,
+            totalPages: Math.ceil(result.total / result.limit),
+            totalRecords: result.total,
+            hasNext: result.hasMore,
+            limit: result.limit
+          }
+        };
       } else {
         // Offline and no cached data
         return {
@@ -371,12 +395,20 @@ class OfflineDirectoryService {
       console.error('Error getting directory data:', error);
       
       // Fallback to offline data if available
-      const hasOfflineData = await sqliteService.isDataDownloaded(`directory_${category}`);
-      if (hasOfflineData) {
-        const offlineParams = { ...params };
-        delete offlineParams.limit;
-        delete offlineParams.page;
-        return await sqliteService.getDirectoryData(category, offlineParams);
+      const offlineData = await asyncStorageService.getDirectoryRecords(`directory_${category}`, { limit: 1 });
+      if (offlineData && offlineData.total > 0) {
+        const result = await asyncStorageService.getDirectoryRecords(`directory_${category}`, params);
+        return {
+          success: true,
+          data: result.records,
+          pagination: {
+            currentPage: result.page,
+            totalPages: Math.ceil(result.total / result.limit),
+            totalRecords: result.total,
+            hasNext: result.hasMore,
+            limit: result.limit
+          }
+        };
       }
       
       return {
@@ -432,11 +464,17 @@ class OfflineDirectoryService {
       }
       
       // Fallback to offline stats
-      const offlineStats = await sqliteService.getStorageInfo();
+      const offlineStats = await asyncStorageService.getStorageInfo();
+      const totals = {
+        national: offlineStats.national?.count || 0,
+        local: offlineStats.local?.count || 0,
+        hotspots: offlineStats.hotspots?.count || 0,
+        total: (offlineStats.national?.count || 0) + (offlineStats.local?.count || 0) + (offlineStats.hotspots?.count || 0)
+      };
       return {
         success: true,
         data: {
-          totals: offlineStats,
+          totals,
           isOffline: true
         }
       };
@@ -453,16 +491,20 @@ class OfflineDirectoryService {
   // Check download status
   async getDownloadStatus() {
     try {
-      const syncStatuses = await sqliteService.getSyncStatus();
-      const storageInfo = await sqliteService.getStorageInfo();
+      const storageInfo = await asyncStorageService.getStorageInfo();
+      const totalRecords = (storageInfo.national?.count || 0) + (storageInfo.local?.count || 0) + (storageInfo.hotspots?.count || 0);
       
       return {
         success: true,
         data: {
-          isDownloaded: storageInfo.total > 0,
-          storageInfo,
-          syncStatuses: Array.isArray(syncStatuses) ? syncStatuses : [syncStatuses].filter(Boolean),
-          lastUpdate: syncStatuses?.[0]?.last_sync || null
+          isDownloaded: totalRecords > 0,
+          storageInfo: {
+            total: totalRecords,
+            national: storageInfo.national?.count || 0,
+            local: storageInfo.local?.count || 0,
+            hotspots: storageInfo.hotspots?.count || 0
+          },
+          lastUpdate: storageInfo.national?.lastSync || storageInfo.local?.lastSync || storageInfo.hotspots?.lastSync || null
         }
       };
     } catch (error) {
@@ -478,7 +520,7 @@ class OfflineDirectoryService {
   // Clear offline data
   async clearOfflineData() {
     try {
-      await sqliteService.clearAllData();
+      await asyncStorageService.clearDirectoryData();
       return {
         success: true,
         message: 'All offline data cleared successfully'
@@ -494,7 +536,8 @@ class OfflineDirectoryService {
 
   // Check if specific category data is available offline
   async isOfflineDataAvailable(category) {
-    return await sqliteService.isDataDownloaded(`directory_${category}`);
+    const result = await asyncStorageService.getDirectoryRecords(`directory_${category}`, { limit: 1 });
+    return result && result.total > 0;
   }
 
   // Get current network status

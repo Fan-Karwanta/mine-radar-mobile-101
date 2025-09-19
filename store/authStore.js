@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { API_URL } from "../constants/api";
-import sqliteService from "../services/sqliteService";
+import asyncStorageOfflineService from "../services/asyncStorageOfflineService";
 import NetInfo from "@react-native-community/netinfo";
 
 export const useAuthStore = create((set) => ({
@@ -39,8 +39,11 @@ export const useAuthStore = create((set) => ({
       await AsyncStorage.setItem("user", JSON.stringify(data.user));
       await AsyncStorage.setItem("token", data.token);
 
-      // Save to SQLite for offline access
-      await sqliteService.saveUserAuth(data.user, data.token);
+      // Save to AsyncStorage for offline access
+      await asyncStorageOfflineService.saveAuthData({
+        ...data.user,
+        token: data.token
+      });
 
       set({ token: data.token, user: data.user, isLoading: false });
 
@@ -80,8 +83,11 @@ export const useAuthStore = create((set) => ({
       await AsyncStorage.setItem("user", JSON.stringify(data.user));
       await AsyncStorage.setItem("token", data.token);
 
-      // Save to SQLite for offline access
-      await sqliteService.saveUserAuth(data.user, data.token);
+      // Save to AsyncStorage for offline access
+      await asyncStorageOfflineService.saveAuthData({
+        ...data.user,
+        token: data.token
+      });
 
       set({ token: data.token, user: data.user, isLoading: false });
 
@@ -99,15 +105,15 @@ export const useAuthStore = create((set) => ({
       let userJson = await AsyncStorage.getItem("user");
       let user = userJson ? JSON.parse(userJson) : null;
 
-      // If no data in AsyncStorage, try SQLite (offline persistence)
+      // If no data in AsyncStorage, try AsyncStorage service (offline persistence)
       if (!token || !user) {
-        const sqliteAuth = await sqliteService.getUserAuth();
-        if (sqliteAuth) {
-          token = sqliteAuth.token;
+        const authData = await asyncStorageOfflineService.getAuthData();
+        if (authData) {
+          token = authData.token;
           user = {
-            id: sqliteAuth.user_id,
-            username: sqliteAuth.username,
-            email: sqliteAuth.email
+            id: authData.id,
+            username: authData.username,
+            email: authData.email
           };
           
           // Sync back to AsyncStorage
@@ -129,8 +135,8 @@ export const useAuthStore = create((set) => ({
     await AsyncStorage.removeItem("token");
     await AsyncStorage.removeItem("user");
     
-    // Clear SQLite
-    await sqliteService.clearUserAuth();
+    // Clear AsyncStorage service
+    await asyncStorageOfflineService.clearAuthData();
     
     set({ token: null, user: null });
   },

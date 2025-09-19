@@ -19,7 +19,7 @@ import SearchFilter from '../../components/SearchFilter';
 import DataTable from '../../components/DataTable';
 import CategoryCard from '../../components/CategoryCard';
 import directoryService from '../../services/directoryService';
-import offlineDirectoryService from '../../services/offlineDirectoryService';
+import asyncStorageOfflineService from '../../services/asyncStorageOfflineService';
 
 // Directory categories
 const categories = [
@@ -111,13 +111,13 @@ export default function Directory() {
 
   // Check network status and offline data availability
   const checkNetworkStatus = async () => {
-    const networkStatus = offlineDirectoryService.getNetworkStatus();
+    const networkStatus = asyncStorageOfflineService.getNetworkStatus();
     setIsOnline(networkStatus.isOnline);
   };
 
   const checkOfflineDataStatus = async () => {
     try {
-      const status = await offlineDirectoryService.getDownloadStatus();
+      const status = await asyncStorageOfflineService.getDownloadStatus();
       if (status.success) {
         setOfflineDataStatus(status.data);
       }
@@ -144,7 +144,7 @@ export default function Directory() {
         type: selectedType !== 'all' ? selectedType : undefined
       };
 
-      const response = await offlineDirectoryService.getDirectoryData(selectedCategory.id, params);
+      const response = await asyncStorageOfflineService.getDirectoryData(selectedCategory.id, params);
 
       if (response.success) {
         // Append new data to existing data
@@ -182,7 +182,7 @@ export default function Directory() {
         type: selectedType !== 'all' ? selectedType : undefined
       };
 
-      const response = await offlineDirectoryService.getDirectoryData(selectedCategory.id, params);
+      const response = await asyncStorageOfflineService.getDirectoryData(selectedCategory.id, params);
 
       if (response.success) {
         const newData = resetData ? response.data : directoryData;
@@ -202,7 +202,7 @@ export default function Directory() {
 
   const fetchStats = async () => {
     try {
-      const response = await offlineDirectoryService.getDirectoryStats();
+      const response = await asyncStorageOfflineService.getDirectoryStats();
       if (response.success) {
         setStats(response.data);
       }
@@ -307,7 +307,7 @@ export default function Directory() {
     setShowDownloadModal(true);
 
     try {
-      const result = await offlineDirectoryService.downloadAllDirectoryData((progress) => {
+      const result = await asyncStorageOfflineService.downloadAllDirectoryData((progress) => {
         setDownloadProgress(progress);
       });
 
@@ -315,29 +315,29 @@ export default function Directory() {
       setShowDownloadModal(false);
 
       if (result.success) {
-        // Wait a bit for SQLite operations to complete, then refresh status and data
+        // Wait a bit for AsyncStorage operations to complete, then refresh status and data
         setTimeout(async () => {
           await checkOfflineDataStatus();
           await fetchDirectoryData(true); // Refresh the current view
-        }, 1000);
+        }, 500);
         
         const downloadDetails = result.downloadDetails || {};
         const duplicateDetails = result.duplicateDetails || {};
         const totalDownloaded = (downloadDetails.national || 0) + (downloadDetails.local || 0) + (downloadDetails.hotspots || 0);
         
-        // Get actual SQLite counts for verification
+        // Get actual AsyncStorage counts for verification
         const actualStats = result.stats || {};
         const actualTotal = actualStats.total || 0;
         
         // Build duplicate information message (for reporting only - all records are saved)
         let duplicateMessage = '';
         if (duplicateDetails.total > 0) {
-          duplicateMessage = `\n\n🔄 Duplicate MongoDB IDs Found: ${duplicateDetails.total} records\n• National: ${duplicateDetails.national || 0} duplicate IDs\n• Local: ${duplicateDetails.local || 0} duplicate IDs\n• Hotspots: ${duplicateDetails.hotspots || 0} duplicate IDs\n\n💾 ALL ${totalDownloaded} records saved to SQLite\n(including ${duplicateDetails.total} with duplicate MongoDB IDs)`;
+          duplicateMessage = `\n\n🔄 Duplicate MongoDB IDs Found: ${duplicateDetails.total} records\n• National: ${duplicateDetails.national || 0} duplicate IDs\n• Local: ${duplicateDetails.local || 0} duplicate IDs\n• Hotspots: ${duplicateDetails.hotspots || 0} duplicate IDs\n\n💾 ALL ${totalDownloaded} records saved to AsyncStorage\n(including ${duplicateDetails.total} with duplicate MongoDB IDs)`;
         }
         
         Alert.alert(
           'Download Complete! 🎉',
-          `Downloaded from MongoDB: ${totalDownloaded} records\n\n📊 MongoDB Records:\n• National: ${downloadDetails.national || 0}\n• Local: ${downloadDetails.local || 0}\n• Hotspots: ${downloadDetails.hotspots || 0}${duplicateMessage}\n\n${actualTotal === totalDownloaded ? '✅ Perfect! All ' + totalDownloaded + ' MongoDB records captured offline!' : actualTotal > 0 ? '✅ Successfully saved ' + actualTotal + ' records to SQLite' : '⚠️ Some records failed to save - check console for details'}`,
+          `Downloaded from MongoDB: ${totalDownloaded} records\n\n📊 MongoDB Records:\n• National: ${downloadDetails.national || 0}\n• Local: ${downloadDetails.local || 0}\n• Hotspots: ${downloadDetails.hotspots || 0}${duplicateMessage}\n\n${actualTotal === totalDownloaded ? '✅ Perfect! All ' + totalDownloaded + ' MongoDB records saved offline!' : actualTotal > 0 ? '✅ Successfully saved ' + actualTotal + ' records to AsyncStorage' : '⚠️ Some records failed to save - check console for details'}`,
           [{ text: 'OK', style: 'default' }]
         );
       } else {
@@ -363,7 +363,7 @@ export default function Directory() {
           style: 'destructive',
           onPress: async () => {
             try {
-              const result = await offlineDirectoryService.clearOfflineData();
+              const result = await asyncStorageOfflineService.clearOfflineData();
               if (result.success) {
                 Alert.alert('Success', 'Offline data cleared successfully');
                 await checkOfflineDataStatus();

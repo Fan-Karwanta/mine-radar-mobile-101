@@ -1,4 +1,4 @@
-import * as SQLite from 'expo-sqlite/legacy';
+import * as SQLite from 'expo-sqlite';
 
 class SQLiteService {
   constructor() {
@@ -11,7 +11,15 @@ class SQLiteService {
     if (this.isInitialized) return;
 
     try {
-      this.db = SQLite.openDatabase('mining_app.db');
+      // Try the new API first, fallback to legacy if needed
+      if (SQLite.openDatabaseAsync) {
+        this.db = await SQLite.openDatabaseAsync('mining_app.db');
+      } else if (SQLite.openDatabase) {
+        this.db = SQLite.openDatabase('mining_app.db');
+      } else {
+        throw new Error('No SQLite API available');
+      }
+      
       await this.createTables();
       this.isInitialized = true;
       console.log('SQLite database initialized successfully');
@@ -21,18 +29,59 @@ class SQLiteService {
     }
   }
 
-  // Execute SQL with promise wrapper
+  // Execute SQL with promise wrapper (works with both APIs)
   executeSql(sql, params = []) {
-    return new Promise((resolve, reject) => {
-      this.db.transaction(tx => {
-        tx.executeSql(
-          sql,
-          params,
-          (_, result) => resolve(result),
-          (_, error) => reject(error)
-        );
-      });
+    return new Promise(async (resolve, reject) => {
+      try {
+        await this.init();
+        
+        // Check if we're using the new async API
+        if (this.db.runAsync) {
+          const result = await this.db.runAsync(sql, params);
+          resolve(result);
+        } else {
+          // Use legacy transaction API
+          this.db.transaction(tx => {
+            tx.executeSql(
+              sql,
+              params,
+              (_, result) => resolve(result),
+              (_, error) => reject(error)
+            );
+          });
+        }
+      } catch (error) {
+        reject(error);
+      }
     });
+  }
+
+  // Execute SQL query (for SELECT statements)
+  async executeQuery(sql, params = []) {
+    try {
+      await this.init();
+      
+      // Check if we're using the new async API
+      if (this.db.getAllAsync) {
+        const result = await this.db.getAllAsync(sql, params);
+        return { rows: { length: result.length, item: (index) => result[index] } };
+      } else {
+        // Use legacy transaction API
+        return new Promise((resolve, reject) => {
+          this.db.transaction(tx => {
+            tx.executeSql(
+              sql,
+              params,
+              (_, result) => resolve(result),
+              (_, error) => reject(error)
+            );
+          });
+        });
+      }
+    } catch (error) {
+      console.error('SQL query error:', error);
+      throw error;
+    }
   }
 
   // Create all necessary tables
@@ -318,7 +367,7 @@ class SQLiteService {
     try {
       await this.init();
       
-      const result = await this.executeSql(
+      const result = await this.executeQuery(
         'SELECT * FROM user_auth WHERE is_logged_in = 1 ORDER BY last_login DESC LIMIT 1'
       );
       
@@ -435,7 +484,7 @@ class SQLiteService {
         query += ` LIMIT ${limit} OFFSET ${offset}`;
       }
       
-      const result = await this.executeSql(query, queryParams);
+      const result = await this.executeQuery(query, queryParams);
       const records = [];
       
       for (let i = 0; i < result.rows.length; i++) {
@@ -444,7 +493,7 @@ class SQLiteService {
       
       // Get total count for pagination
       const countQuery = `SELECT COUNT(*) as total FROM ${tableName} ${whereClause}`;
-      const countResult = await this.executeSql(countQuery, queryParams);
+      const countResult = await this.executeQuery(countQuery, queryParams);
       const total = countResult.rows.item(0).total;
       
       return {
@@ -485,7 +534,7 @@ class SQLiteService {
     try {
       await this.init();
       
-      const result = await this.executeSql(
+      const result = await this.executeQuery(
         'SELECT * FROM sync_status WHERE table_name = ?',
         [tableName]
       );
@@ -536,7 +585,7 @@ class SQLiteService {
     try {
       await this.init();
       
-      const result = await this.executeSql(
+      const result = await this.executeQuery(
         'SELECT * FROM report_drafts WHERE reporter_id = ? ORDER BY created_at DESC',
         [reporterId]
       );
@@ -607,7 +656,7 @@ class SQLiteService {
     try {
       await this.init();
       
-      const result = await this.executeSql(
+      const result = await this.executeQuery(
         'SELECT * FROM report_drafts WHERE needs_sync = 1 AND is_synced = 0'
       );
       
