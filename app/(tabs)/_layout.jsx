@@ -2,9 +2,14 @@ import { Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import COLORS from "../../constants/colors";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useAuthStore } from "../../store/authStore";
 
 export default function TabLayout() {
   const insets = useSafeAreaInsets();
+  const { user } = useAuthStore();
+
+  // Check if user can access Reports (only admin and Deputized Personnel)
+  const canAccessReports = user?.role === 'admin' || user?.role === 'Deputized Personnel';
 
   return (
     <Tabs
@@ -42,6 +47,8 @@ export default function TabLayout() {
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="document-text-outline" size={size} color={color} />
           ),
+          // Hide Reports tab for Public Users
+          href: canAccessReports ? undefined : null,
         }}
       />
       <Tabs.Screen

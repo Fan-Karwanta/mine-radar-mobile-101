@@ -11,6 +11,7 @@ import {
   ActivityIndicator,
   RefreshControl,
   TextInput,
+  Linking,
 } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
 import { Ionicons } from '@expo/vector-icons';
@@ -25,21 +26,21 @@ import asyncStorageOfflineService from '../../services/asyncStorageOfflineServic
 const categories = [
   {
     id: 'national',
-    label: 'Directory of National',
+    label: 'National',
     description: 'National mining agreements and permits',
     icon: 'business-outline',
     color: COLORS.primary
   },
   {
     id: 'local',
-    label: 'Directory of Local',
+    label: 'Local',
     description: 'Local quarry permits and applications',
     icon: 'location-outline',
     color: '#2196F3'
   },
   {
     id: 'hotspots',
-    label: 'Directory of Hotspots',
+    label: 'Hotspots',
     description: 'Illegal mining incident reports',
     icon: 'warning-outline',
     color: '#FF5722'
@@ -74,7 +75,7 @@ export default function Directory() {
   const [filterOptions, setFilterOptions] = useState({
     classifications: [],
     types: [],
-    statuses: []
+    statuses: ['Operating', 'Non-operating', 'Suspended', 'Expired', 'Cancelled', 'Care and Maintenance', 'Unknown']
   });
   
   // Offline functionality state
@@ -96,9 +97,11 @@ export default function Directory() {
   useEffect(() => {
     fetchDirectoryData(1, false);
   }, [selectedCategory, searchQuery, selectedProvince, selectedStatus, selectedClassification, selectedType]);
-
+  
+  // Ensure filter options are loaded when category changes
   useEffect(() => {
     if (selectedCategory) {
+      console.log('Loading filter options for category:', selectedCategory.id);
       fetchFilterOptions();
     }
   }, [selectedCategory]);
@@ -248,6 +251,16 @@ export default function Directory() {
           statuses = [...new Set(data.map(item => item.status).filter(Boolean))];
         }
 
+        // Add common status values if they don't exist
+        const commonStatuses = ['Operating', 'Non-operating', 'Suspended', 'Expired', 'Cancelled', 'Care and Maintenance', 'Unknown'];
+        
+        commonStatuses.forEach(status => {
+          if (!statuses.includes(status)) {
+            statuses.push(status);
+          }
+        });
+        
+        console.log('Filter options - statuses:', statuses);
         setFilterOptions({
           classifications: classifications.sort(),
           types: types.sort(),
@@ -273,6 +286,7 @@ export default function Directory() {
   };
 
   const handleCategorySelect = (category) => {
+    console.log('Changing category to:', category?.id);
     setSelectedCategory(category);
     setShowCategoryModal(false);
     setSearchQuery('');
@@ -280,11 +294,12 @@ export default function Directory() {
     setSelectedStatus('all');
     setSelectedClassification('all');
     setSelectedType('all');
-    // Reset filter options when category changes
+    
+    // Reset and initialize filter options when category changes
     setFilterOptions({
       classifications: [],
       types: [],
-      statuses: []
+      statuses: ['Operating', 'Non-operating', 'Suspended', 'Expired', 'Cancelled', 'Care and Maintenance', 'Unknown']
     });
   };
 
@@ -336,8 +351,8 @@ export default function Directory() {
         }
         
         Alert.alert(
-          'Download Complete! 🎉',
-          `Downloaded from MongoDB: ${totalDownloaded} records\n\n📊 MongoDB Records:\n• National: ${downloadDetails.national || 0}\n• Local: ${downloadDetails.local || 0}\n• Hotspots: ${downloadDetails.hotspots || 0}${duplicateMessage}\n\n${actualTotal === totalDownloaded ? '✅ Perfect! All ' + totalDownloaded + ' MongoDB records saved offline!' : actualTotal > 0 ? '✅ Successfully saved ' + actualTotal + ' records to AsyncStorage' : '⚠️ Some records failed to save - check console for details'}`,
+          'Download Complete!',
+          `National: ${downloadDetails.national || 0}\nLocal: ${downloadDetails.local || 0}\nHotspots: ${downloadDetails.hotspots || 0}\n\nAll ${totalDownloaded} records were saved offline!`,
           [{ text: 'OK', style: 'default' }]
         );
       } else {
@@ -380,51 +395,108 @@ export default function Directory() {
     );
   };
 
+  // Hard refresh offline data
+  const handleHardRefreshOfflineData = async () => {
+    Alert.alert(
+      'Refresh Offline Data',
+      'This will clear current offline data and download fresh data from the server. This may take a few minutes.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Refresh',
+          onPress: async () => {
+            try {
+              setIsDownloading(true);
+              setShowDownloadModal(true);
+              const result = await asyncStorageOfflineService.hardRefreshOfflineData((progress) => {
+                setDownloadProgress(progress);
+              });
+              
+              if (result.success) {
+                Alert.alert('Success', 'Offline data refreshed successfully! All data is now up to date.');
+                await checkOfflineDataStatus();
+                // Refresh current view
+                await fetchDirectoryData(true);
+                await fetchStats();
+              } else {
+                Alert.alert('Error', result.error || 'Failed to refresh offline data');
+              }
+            } catch (error) {
+              console.error('Error refreshing offline data:', error);
+              Alert.alert('Error', 'An error occurred while refreshing offline data');
+            } finally {
+              setIsDownloading(false);
+              setShowDownloadModal(false);
+              setDownloadProgress({ national: 0, local: 0, hotspots: 0, overall: 0 });
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  // Helper function to determine status color
+  const getStatusColor = (status) => {
+    if (!status) return '#999'; // Default gray for Unknown
+    
+    const statusLower = status.toLowerCase();
+    if (statusLower.includes('operating') || statusLower.includes('approved')) {
+      return '#4caf50'; // Green for active/operating
+    } else if (statusLower.includes('expired') || statusLower.includes('denied')) {
+      return '#f44336'; // Red for expired/denied
+    } else if (statusLower.includes('pending') || statusLower.includes('evaluation')) {
+      return '#ff9800'; // Orange for pending/under evaluation
+    } else {
+      return COLORS.primary; // Default to primary color
+    }
+  };
+  
   const formatRecordForDisplay = (record) => {
     // Transform database record to display format based on category
     switch (selectedCategory?.id) {
       case 'national':
         return {
           id: record._id,
-          permitNumber: record.contractNumber,
-          permitHolder: record.contractor,
-          commodity: record.commodity,
-          area: record.area,
-          barangay: record.barangay,
-          municipality: record.municipality,
-          province: record.province,
-          status: record.status,
+          permitNumber: record.contractNumber || 'N/A',
+          permitHolder: record.contractor || 'N/A',
+          commodity: record.commodity || 'N/A',
+          area: record.area || 'N/A',
+          barangay: record.barangay || 'N/A',
+          municipality: record.municipality || 'N/A',
+          province: record.province || 'N/A',
+          status: record.status || 'Unknown',
           classification: record.classification || 'N/A',
           type: record.type || 'N/A',
-          proponent: record.proponent,
-          contactNumber: record.contactNumber,
-          operator: record.operator,
-          dateFiled: record.dateFiled,
-          dateApproved: record.approvalDate,
-          renewalDate: record.renewalDate,
-          expirationDate: record.expirationDate,
-          sourceOfRawMaterials: record.sourceOfRawMaterials,
-          googleMapLink: record.googleMapLink
+          proponent: record.proponent || '',
+          contactNumber: record.contactNumber || '',
+          operator: record.operator || '',
+          dateFiled: record.dateFiled || '',
+          dateApproved: record.approvalDate || '',
+          renewalDate: record.renewalDate || '',
+          expirationDate: record.expirationDate || '',
+          sourceOfRawMaterials: record.sourceOfRawMaterials || '',
+          googleMapLink: record.googleMapLink || ''
         };
       case 'local':
         return {
           id: record._id,
-          permitNumber: record.permitNumber,
-          permitHolder: record.permitHolder,
-          commodity: record.commodities,
-          area: record.area,
-          barangay: record.barangays,
-          municipality: record.municipality,
-          province: record.province,
-          status: record.status,
+          permitNumber: record.permitNumber || 'N/A',
+          permitHolder: record.permitHolder || 'N/A',
+          commodity: record.commodities || 'N/A',
+          area: record.area || 'N/A',
+          barangay: record.barangays || 'N/A',
+          municipality: record.municipality || 'N/A',
+          province: record.province || 'N/A',
+          status: record.status || 'Unknown',
           classification: record.classification || 'N/A',
           type: record.type || 'N/A',
-          dateFiled: record.dateFiled,
-          dateApproved: record.dateApproved,
-          dateExpiry: record.dateOfExpiry,
-          numberOfRenewal: record.numberOfRenewal,
-          dateOfFirstIssuance: record.dateOfFirstIssuance,
-          googleMapLink: record.googleMapLink
+          // Ensure all date fields are properly mapped
+          dateOfFirstIssuance: record.dateOfFirstIssuance || '',
+          dateFiled: record.dateFiled || '',
+          dateApproved: record.dateApproved || '',
+          dateExpiry: record.dateOfExpiry || '',
+          numberOfRenewal: record.numberOfRenewal || 0,
+          googleMapLink: record.googleMapLink || ''
         };
       case 'hotspots':
         return {
@@ -436,9 +508,9 @@ export default function Directory() {
           barangay: record.barangay || 'N/A',
           municipality: record.municipality || 'N/A',
           province: record.province || 'N/A',
-          status: record.actionsTaken || 'N/A',
+          status: record.actionsTaken || 'Unknown',
           classification: record.natureOfReportedIllegalAct || 'N/A',
-          type: record.typeOfCommodity || 'N/A',
+          // Hotspots specific fields
           sitio: record.sitio || '',
           longitude: record.longitude || '',
           latitude: record.latitude || '',
@@ -446,9 +518,11 @@ export default function Directory() {
           lawsViolated: record.lawsViolated || '',
           numberOfCDOIssued: record.numberOfCDOIssued || 0,
           remarks: record.remarks || '',
-          dateApproved: record.dateOfActionTaken || '',
-          dateExpiry: record.dateIssued || '',
-          googleMapLink: record.googleMapLink || ''
+          dateOfActionTaken: record.dateOfActionTaken || '',
+          dateIssued: record.dateIssued || '',
+          googleMapLink: record.googleMapLink || '',
+          natureOfReportedIllegalAct: record.natureOfReportedIllegalAct || '',
+          actionsTaken: record.actionsTaken || ''
         };
       default:
         return record;
@@ -465,7 +539,7 @@ export default function Directory() {
       <View style={styles.modalOverlay}>
         <View style={styles.detailModalContent}>
           <View style={styles.detailModalHeader}>
-            <Text style={styles.detailModalTitle}>Permit Details</Text>
+            <Text style={styles.detailModalTitle}>Basic Information</Text>
             <TouchableOpacity onPress={() => setShowDetailModal(false)}>
               <Ionicons name="close" size={24} color={COLORS.textPrimary} />
             </TouchableOpacity>
@@ -516,52 +590,93 @@ export default function Directory() {
 
               <View style={styles.detailRow}>
                 <Text style={styles.detailLabel}>STATUS:</Text>
-                <Text style={[styles.detailValue, styles.statusText]}>{selectedRecord.status}</Text>
+                <Text 
+                  style={[
+                    styles.detailValue, 
+                    styles.statusText,
+                    { 
+                      color: getStatusColor(selectedRecord.status),
+                      fontWeight: '600'
+                    }
+                  ]}
+                >
+                  {selectedRecord.status || 'Status Not Available'}
+                </Text>
               </View>
+
+              {/* Google Map Link for national category - Local has its own implementation */}
+              {selectedCategory?.id === 'national' && selectedRecord.googleMapLink && selectedRecord.googleMapLink.trim() !== '' && selectedRecord.googleMapLink !== 'N/A' && (
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>GOOGLE MAP LINK:</Text>
+                  <TouchableOpacity onPress={async () => {
+                    try {
+                      let url = selectedRecord.googleMapLink;
+                      
+                      // Ensure URL has proper protocol
+                      if (!url.startsWith('http://') && !url.startsWith('https://')) {
+                        url = `https://${url}`;
+                      }
+                      
+                      // Check if URL can be opened
+                      const canOpen = await Linking.canOpenURL(url);
+                      if (canOpen) {
+                        await Linking.openURL(url);
+                      } else {
+                        Alert.alert('Error', 'Cannot open this link');
+                      }
+                    } catch (error) {
+                      console.error('Error opening Google Maps:', error);
+                      Alert.alert('Error', 'Failed to open Google Maps link');
+                    }
+                  }}>
+                    <Text style={[styles.detailValue, { color: COLORS.primary, textDecorationLine: 'underline' }]}>View Location</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
 
               {/* National Directory specific fields */}
               {selectedCategory?.id === 'national' && (
                 <>
-                  {selectedRecord.proponent && (
-                    <View style={styles.detailRow}>
-                      <Text style={styles.detailLabel}>PROPONENT:</Text>
-                      <Text style={styles.detailValue}>{selectedRecord.proponent}</Text>
-                    </View>
-                  )}
-                  {selectedRecord.operator && (
-                    <View style={styles.detailRow}>
-                      <Text style={styles.detailLabel}>OPERATOR:</Text>
-                      <Text style={styles.detailValue}>{selectedRecord.operator}</Text>
-                    </View>
-                  )}
-                  {selectedRecord.contactNumber && (
-                    <View style={styles.detailRow}>
-                      <Text style={styles.detailLabel}>CONTACT NUMBER:</Text>
-                      <Text style={styles.detailValue}>{selectedRecord.contactNumber}</Text>
-                    </View>
-                  )}
                   {selectedRecord.dateFiled && (
                     <View style={styles.detailRow}>
                       <Text style={styles.detailLabel}>DATE FILED:</Text>
                       <Text style={styles.detailValue}>{selectedRecord.dateFiled}</Text>
                     </View>
                   )}
-                  {selectedRecord.dateApproved && (
+                  {selectedRecord.dateApproved && selectedRecord.dateApproved.trim() !== '' && selectedRecord.dateApproved !== 'N/A' && (
                     <View style={styles.detailRow}>
                       <Text style={styles.detailLabel}>APPROVAL DATE:</Text>
                       <Text style={styles.detailValue}>{selectedRecord.dateApproved}</Text>
                     </View>
                   )}
-                  {selectedRecord.renewalDate && (
+                  {selectedRecord.renewalDate && selectedRecord.renewalDate.trim() !== '' && selectedRecord.renewalDate !== 'N/A' && (
                     <View style={styles.detailRow}>
                       <Text style={styles.detailLabel}>RENEWAL DATE:</Text>
                       <Text style={styles.detailValue}>{selectedRecord.renewalDate}</Text>
                     </View>
                   )}
-                  {selectedRecord.expirationDate && (
+                  {selectedRecord.expirationDate && selectedRecord.expirationDate.trim() !== '' && selectedRecord.expirationDate !== 'N/A' && (
                     <View style={styles.detailRow}>
                       <Text style={styles.detailLabel}>EXPIRATION DATE:</Text>
                       <Text style={styles.detailValue}>{selectedRecord.expirationDate}</Text>
+                    </View>
+                  )}
+                  {selectedRecord.proponent && selectedRecord.proponent.trim() !== '' && selectedRecord.proponent !== 'N/A' && (
+                    <View style={styles.detailRow}>
+                      <Text style={styles.detailLabel}>PROPONENT:</Text>
+                      <Text style={styles.detailValue}>{selectedRecord.proponent}</Text>
+                    </View>
+                  )}
+                  {selectedRecord.operator && selectedRecord.operator.trim() !== '' && selectedRecord.operator !== 'N/A' && selectedRecord.operator !== '--' && (
+                    <View style={styles.detailRow}>
+                      <Text style={styles.detailLabel}>OPERATOR:</Text>
+                      <Text style={styles.detailValue}>{selectedRecord.operator}</Text>
+                    </View>
+                  )}
+                  {selectedRecord.contactNumber && selectedRecord.contactNumber.trim() !== '' && selectedRecord.contactNumber !== 'N/A' && (
+                    <View style={styles.detailRow}>
+                      <Text style={styles.detailLabel}>CONTACT NUMBER:</Text>
+                      <Text style={styles.detailValue}>{selectedRecord.contactNumber}</Text>
                     </View>
                   )}
                   {selectedRecord.sourceOfRawMaterials && selectedRecord.sourceOfRawMaterials !== 'N/A' && (
@@ -576,34 +691,68 @@ export default function Directory() {
               {/* Local Directory specific fields */}
               {selectedCategory?.id === 'local' && (
                 <>
-                  {selectedRecord.dateFiled && (
+                  {/* Date of First Issuance - Top priority */}
+                  {selectedRecord.dateOfFirstIssuance && selectedRecord.dateOfFirstIssuance.trim() !== '' && selectedRecord.dateOfFirstIssuance !== 'N/A' && (
+                    <View style={styles.detailRow}>
+                      <Text style={styles.detailLabel}>DATE OF FIRST ISSUANCE:</Text>
+                      <Text style={styles.detailValue}>{selectedRecord.dateOfFirstIssuance}</Text>
+                    </View>
+                  )}
+                  {/* Date Filed */}
+                  {selectedRecord.dateFiled && selectedRecord.dateFiled.trim() !== '' && selectedRecord.dateFiled !== 'N/A' && (
                     <View style={styles.detailRow}>
                       <Text style={styles.detailLabel}>DATE FILED:</Text>
                       <Text style={styles.detailValue}>{selectedRecord.dateFiled}</Text>
                     </View>
                   )}
-                  {selectedRecord.dateApproved && (
+                  {/* Date Approved */}
+                  {selectedRecord.dateApproved && selectedRecord.dateApproved.trim() !== '' && selectedRecord.dateApproved !== 'N/A' && (
                     <View style={styles.detailRow}>
                       <Text style={styles.detailLabel}>DATE APPROVED:</Text>
                       <Text style={styles.detailValue}>{selectedRecord.dateApproved}</Text>
                     </View>
                   )}
-                  {selectedRecord.dateExpiry && (
+                  {/* Date of Expiry */}
+                  {selectedRecord.dateExpiry && selectedRecord.dateExpiry.trim() !== '' && selectedRecord.dateExpiry !== 'N/A' && (
                     <View style={styles.detailRow}>
                       <Text style={styles.detailLabel}>DATE OF EXPIRY:</Text>
                       <Text style={styles.detailValue}>{selectedRecord.dateExpiry}</Text>
                     </View>
                   )}
-                  {selectedRecord.numberOfRenewal !== undefined && (
+                  {/* Number of Renewal */}
+                  {selectedRecord.numberOfRenewal !== undefined && selectedRecord.numberOfRenewal !== null && (
                     <View style={styles.detailRow}>
                       <Text style={styles.detailLabel}>NO. OF RENEWAL:</Text>
-                      <Text style={styles.detailValue}>{selectedRecord.numberOfRenewal}</Text>
+                      <Text style={styles.detailValue}>{selectedRecord.numberOfRenewal.toString()}</Text>
                     </View>
                   )}
-                  {selectedRecord.dateOfFirstIssuance && (
+                  {/* Google Map Link - Added for local directory */}
+                  {selectedRecord.googleMapLink && selectedRecord.googleMapLink.trim() !== '' && selectedRecord.googleMapLink !== 'N/A' && (
                     <View style={styles.detailRow}>
-                      <Text style={styles.detailLabel}>DATE OF FIRST ISSUANCE:</Text>
-                      <Text style={styles.detailValue}>{selectedRecord.dateOfFirstIssuance}</Text>
+                      <Text style={styles.detailLabel}>GOOGLE MAP LINK:</Text>
+                      <TouchableOpacity onPress={async () => {
+                        try {
+                          let url = selectedRecord.googleMapLink;
+                          
+                          // Ensure URL has proper protocol
+                          if (!url.startsWith('http://') && !url.startsWith('https://')) {
+                            url = `https://${url}`;
+                          }
+                          
+                          // Check if URL can be opened
+                          const canOpen = await Linking.canOpenURL(url);
+                          if (canOpen) {
+                            await Linking.openURL(url);
+                          } else {
+                            Alert.alert('Error', 'Cannot open this link');
+                          }
+                        } catch (error) {
+                          console.error('Error opening Google Maps:', error);
+                          Alert.alert('Error', 'Failed to open Google Maps link');
+                        }
+                      }}>
+                        <Text style={[styles.detailValue, { color: COLORS.primary, textDecorationLine: 'underline' }]}>View Location</Text>
+                      </TouchableOpacity>
                     </View>
                   )}
                 </>
@@ -612,6 +761,91 @@ export default function Directory() {
               {/* Hotspots Directory specific fields */}
               {selectedCategory?.id === 'hotspots' && (
                 <>
+                  {/* Coordinates */}
+                  {selectedRecord.longitude && selectedRecord.longitude.toString().trim() !== '' && (
+                    <View style={styles.detailRow}>
+                      <Text style={styles.detailLabel}>LONGITUDE:</Text>
+                      <Text style={styles.detailValue}>{String(selectedRecord.longitude)}</Text>
+                    </View>
+                  )}
+                  {selectedRecord.latitude && selectedRecord.latitude.toString().trim() !== '' && (
+                    <View style={styles.detailRow}>
+                      <Text style={styles.detailLabel}>LATITUDE:</Text>
+                      <Text style={styles.detailValue}>{String(selectedRecord.latitude)}</Text>
+                    </View>
+                  )}
+                  
+                  {/* Nature of Reported Illegal Act */}
+                  {selectedRecord.natureOfReportedIllegalAct && selectedRecord.natureOfReportedIllegalAct.trim() !== '' && (
+                    <View style={styles.detailRow}>
+                      <Text style={styles.detailLabel}>NATURE OF REPORTED ILLEGAL ACT:</Text>
+                      <Text style={styles.detailValue}>{String(selectedRecord.natureOfReportedIllegalAct)}</Text>
+                    </View>
+                  )}
+                  
+                  {/* Actions Taken */}
+                  {selectedRecord.actionsTaken && selectedRecord.actionsTaken.trim() !== '' && (
+                    <View style={styles.detailRow}>
+                      <Text style={styles.detailLabel}>ACTIONS TAKEN:</Text>
+                      <Text style={styles.detailValue}>{String(selectedRecord.actionsTaken)}</Text>
+                    </View>
+                  )}
+                  
+                  {/* Date of Action Taken */}
+                  {selectedRecord.dateOfActionTaken && selectedRecord.dateOfActionTaken.trim() !== '' && (
+                    <View style={styles.detailRow}>
+                      <Text style={styles.detailLabel}>DATE OF ACTION TAKEN:</Text>
+                      <Text style={styles.detailValue}>{String(selectedRecord.dateOfActionTaken)}</Text>
+                    </View>
+                  )}
+                  
+                  {/* No. of CDO Issued */}
+                  {selectedRecord.numberOfCDOIssued !== undefined && selectedRecord.numberOfCDOIssued !== null && selectedRecord.numberOfCDOIssued !== 0 && (
+                    <View style={styles.detailRow}>
+                      <Text style={styles.detailLabel}>NO. OF CDO ISSUED:</Text>
+                      <Text style={styles.detailValue}>{String(selectedRecord.numberOfCDOIssued)}</Text>
+                    </View>
+                  )}
+                  
+                  {/* Date Issued */}
+                  {selectedRecord.dateIssued && selectedRecord.dateIssued.trim() !== '' && (
+                    <View style={styles.detailRow}>
+                      <Text style={styles.detailLabel}>DATE ISSUED:</Text>
+                      <Text style={styles.detailValue}>{String(selectedRecord.dateIssued)}</Text>
+                    </View>
+                  )}
+                  
+                  {/* Google Map Link for hotspots */}
+                  {selectedRecord.googleMapLink && selectedRecord.googleMapLink.trim() !== '' && selectedRecord.googleMapLink !== 'N/A' && (
+                    <View style={styles.detailRow}>
+                      <Text style={styles.detailLabel}>GOOGLE MAP LINK:</Text>
+                      <TouchableOpacity onPress={async () => {
+                        try {
+                          let url = selectedRecord.googleMapLink;
+                          
+                          // Ensure URL has proper protocol
+                          if (!url.startsWith('http://') && !url.startsWith('https://')) {
+                            url = `https://${url}`;
+                          }
+                          
+                          // Check if URL can be opened
+                          const canOpen = await Linking.canOpenURL(url);
+                          if (canOpen) {
+                            await Linking.openURL(url);
+                          } else {
+                            Alert.alert('Error', 'Cannot open this link');
+                          }
+                        } catch (error) {
+                          console.error('Error opening Google Maps:', error);
+                          Alert.alert('Error', 'Failed to open Google Maps link');
+                        }
+                      }}>
+                        <Text style={[styles.detailValue, { color: COLORS.primary, textDecorationLine: 'underline' }]}>View Location</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                  
+                  {/* Additional fields */}
                   {selectedRecord.sitio && selectedRecord.sitio.trim() !== '' && (
                     <View style={styles.detailRow}>
                       <Text style={styles.detailLabel}>SITIO:</Text>
@@ -630,51 +864,16 @@ export default function Directory() {
                       <Text style={styles.detailValue}>{String(selectedRecord.lawsViolated)}</Text>
                     </View>
                   )}
-                  {selectedRecord.numberOfCDOIssued !== undefined && selectedRecord.numberOfCDOIssued !== null && selectedRecord.numberOfCDOIssued !== 0 && (
-                    <View style={styles.detailRow}>
-                      <Text style={styles.detailLabel}>NO. OF CDO ISSUED:</Text>
-                      <Text style={styles.detailValue}>{String(selectedRecord.numberOfCDOIssued)}</Text>
-                    </View>
-                  )}
                   {selectedRecord.remarks && selectedRecord.remarks.trim() !== '' && (
                     <View style={styles.detailRow}>
                       <Text style={styles.detailLabel}>REMARKS:</Text>
                       <Text style={styles.detailValue}>{String(selectedRecord.remarks)}</Text>
                     </View>
                   )}
-                  {selectedRecord.longitude && selectedRecord.longitude.toString().trim() !== '' && (
-                    <View style={styles.detailRow}>
-                      <Text style={styles.detailLabel}>LONGITUDE:</Text>
-                      <Text style={styles.detailValue}>{String(selectedRecord.longitude)}</Text>
-                    </View>
-                  )}
-                  {selectedRecord.latitude && selectedRecord.latitude.toString().trim() !== '' && (
-                    <View style={styles.detailRow}>
-                      <Text style={styles.detailLabel}>LATITUDE:</Text>
-                      <Text style={styles.detailValue}>{String(selectedRecord.latitude)}</Text>
-                    </View>
-                  )}
-                  {selectedRecord.dateApproved && selectedRecord.dateApproved.trim() !== '' && (
-                    <View style={styles.detailRow}>
-                      <Text style={styles.detailLabel}>DATE OF ACTION TAKEN:</Text>
-                      <Text style={styles.detailValue}>{String(selectedRecord.dateApproved)}</Text>
-                    </View>
-                  )}
-                  {selectedRecord.dateExpiry && selectedRecord.dateExpiry.trim() !== '' && (
-                    <View style={styles.detailRow}>
-                      <Text style={styles.detailLabel}>DATE ISSUED:</Text>
-                      <Text style={styles.detailValue}>{String(selectedRecord.dateExpiry)}</Text>
-                    </View>
-                  )}
                 </>
               )}
 
-              {selectedRecord.googleMapLink && selectedRecord.googleMapLink.trim() !== '' && (
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>GOOGLE MAP LINK:</Text>
-                  <Text style={styles.detailValue}>{String(selectedRecord.googleMapLink) || 'Not available'}</Text>
-                </View>
-              )}
+              {/* Google Map Link is now handled in each specific section */}
             </ScrollView>
           )}
         </View>
@@ -687,27 +886,43 @@ export default function Directory() {
       <View style={styles.modalOverlay}>
         <View style={styles.categoryModalContent}>
           <View style={styles.categoryModalHeader}>
-            <Text style={styles.categoryModalTitle}>MGB CALABARZON Database</Text>
-            <TouchableOpacity onPress={() => setShowCategoryModal(false)}>
-              <Ionicons name="close" size={24} color={COLORS.textPrimary} />
-            </TouchableOpacity>
+            <View style={styles.categoryModalHeaderContent}>
+              <View style={styles.categoryModalIconContainer}>
+                <Ionicons name="grid-outline" size={28} color={COLORS.primary} />
+              </View>
+              <View style={styles.categoryModalTitleContainer}>
+                <Text style={styles.categoryModalTitle}>Database</Text>
+                <Text style={styles.categoryModalSubtitle}>Select a category</Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setShowCategoryModal(false)}
+                style={styles.categoryModalCloseButton}
+              >
+                <Ionicons name="close" size={24} color={COLORS.textPrimary} />
+              </TouchableOpacity>
+            </View>
           </View>
-          
-          <Text style={styles.categorySubtitle}>
-            Easy access to MGB CALABARZON database of:
-          </Text>
-          
+
           {stats && (
             <View style={styles.statsContainer}>
-              <Text style={styles.statsTitle}>Database Statistics:</Text>
-              <View style={styles.statsRow}>
-                <Text style={styles.statsLabel}>National: {stats.totals?.national || 0}</Text>
-                <Text style={styles.statsLabel}>Local: {stats.totals?.local || 0}</Text>
-                <Text style={styles.statsLabel}>Hotspots: {stats.totals?.hotspots || 0}</Text>
+              <Text style={styles.statsTitle}>Database Statistics</Text>
+              <View style={styles.statsGrid}>
+                <View style={[styles.statCard, { backgroundColor: '#2563EB15' }]}>
+                  <Text style={[styles.statNumber, { color: '#2563EB' }]}>{stats.totals?.national || 0}</Text>
+                  <Text style={styles.statLabel}>National</Text>
+                </View>
+                <View style={[styles.statCard, { backgroundColor: '#10B98115' }]}>
+                  <Text style={[styles.statNumber, { color: '#10B981' }]}>{stats.totals?.local || 0}</Text>
+                  <Text style={styles.statLabel}>Local</Text>
+                </View>
+                <View style={[styles.statCard, { backgroundColor: '#EF444415' }]}>
+                  <Text style={[styles.statNumber, { color: '#EF4444' }]}>{stats.totals?.hotspots || 0}</Text>
+                  <Text style={styles.statLabel}>Hotspots</Text>
+                </View>
               </View>
             </View>
           )}
-          
+
           <FlatList
             data={categories}
             keyExtractor={(item) => item.id}
@@ -719,6 +934,7 @@ export default function Directory() {
               />
             )}
             showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.categoryListContainer}
           />
         </View>
       </View>
@@ -857,6 +1073,29 @@ export default function Directory() {
                 {offlineDataStatus.isDownloaded ? 'Downloaded' : 'Download'}
               </Text>
             </TouchableOpacity>
+            
+            {/* Debug button 
+            <TouchableOpacity 
+              style={[styles.debugButton]}
+              onPress={() => {
+                console.log('Current filter options:', filterOptions);
+                console.log('Selected status:', selectedStatus);
+                console.log('Selected category:', selectedCategory?.id);
+                
+                // Force refresh filter options
+                fetchFilterOptions();
+                
+                // Force refresh data
+                fetchDirectoryData(true);
+              }}
+            >
+              <Ionicons 
+                name="bug" 
+                size={20} 
+                color="#ff6b6b" 
+              />
+              <Text style={styles.debugButtonText}>Debug</Text>
+            </TouchableOpacity> */}
           </View>
         </View>
         
@@ -908,58 +1147,79 @@ export default function Directory() {
         {!filtersCollapsed && (
           <>
             <View style={styles.filterRow}>
+              {/* For National and Local: TYPE comes first, for Hotspots: NATURE OF REPORT comes first */}
               <View style={styles.filterItem}>
                 <Text style={styles.filterLabel}>
-                  {selectedCategory?.id === 'hotspots' ? 'ILLEGAL ACT TYPE:' : 'CLASSIFICATION:'}
+                  {selectedCategory?.id === 'hotspots' ? 'NATURE OF REPORT:' : 'TYPE:'}
                 </Text>
                 <View style={styles.pickerContainer}>
                   <Picker
-                    selectedValue={selectedClassification}
-                    onValueChange={setSelectedClassification}
+                    selectedValue={selectedCategory?.id === 'hotspots' ? selectedClassification : selectedType}
+                    onValueChange={selectedCategory?.id === 'hotspots' ? setSelectedClassification : setSelectedType}
                     style={styles.picker}
                     dropdownIconColor={COLORS.primary}
                   >
                     <Picker.Item 
-                      label={selectedCategory?.id === 'hotspots' ? 'All Illegal Act Types' : 'All Classifications'} 
+                      label={selectedCategory?.id === 'hotspots' ? 'All Nature of Reports' : 'All Types'} 
                       value="all" 
                       style={styles.pickerItem} 
                     />
-                    {filterOptions.classifications.map((classification) => (
-                      <Picker.Item 
-                        key={classification} 
-                        label={classification} 
-                        value={classification} 
-                        style={styles.pickerItem}
-                      />
-                    ))}
+                    {selectedCategory?.id === 'hotspots' ? 
+                      filterOptions.classifications.map((classification) => (
+                        <Picker.Item 
+                          key={classification} 
+                          label={classification} 
+                          value={classification} 
+                          style={styles.pickerItem}
+                        />
+                      )) :
+                      filterOptions.types.map((type) => (
+                        <Picker.Item 
+                          key={type} 
+                          label={type} 
+                          value={type} 
+                          style={styles.pickerItem}
+                        />
+                      ))
+                    }
                   </Picker>
                 </View>
               </View>
               
               <View style={styles.filterItem}>
                 <Text style={styles.filterLabel}>
-                  {selectedCategory?.id === 'hotspots' ? 'COMMODITY TYPE:' : 'TYPE:'}
+                  {selectedCategory?.id === 'hotspots' ? 'COMMODITY:' : 'COMMODITY:'}
                 </Text>
                 <View style={styles.pickerContainer}>
                   <Picker
-                    selectedValue={selectedType}
-                    onValueChange={setSelectedType}
+                    selectedValue={selectedCategory?.id === 'hotspots' ? selectedType : selectedClassification}
+                    onValueChange={selectedCategory?.id === 'hotspots' ? setSelectedType : setSelectedClassification}
                     style={styles.picker}
                     dropdownIconColor={COLORS.primary}
                   >
                     <Picker.Item 
-                      label={selectedCategory?.id === 'hotspots' ? 'All Commodity Types' : 'All Types'} 
+                      label="All Commodities" 
                       value="all" 
                       style={styles.pickerItem} 
                     />
-                    {filterOptions.types.map((type) => (
-                      <Picker.Item 
-                        key={type} 
-                        label={type} 
-                        value={type} 
-                        style={styles.pickerItem}
-                      />
-                    ))}
+                    {selectedCategory?.id === 'hotspots' ? 
+                      filterOptions.types.map((type) => (
+                        <Picker.Item 
+                          key={type} 
+                          label={type} 
+                          value={type} 
+                          style={styles.pickerItem}
+                        />
+                      )) :
+                      filterOptions.classifications.map((classification) => (
+                        <Picker.Item 
+                          key={classification} 
+                          label={classification} 
+                          value={classification} 
+                          style={styles.pickerItem}
+                        />
+                      ))
+                    }
                   </Picker>
                 </View>
               </View>
@@ -987,21 +1247,24 @@ export default function Directory() {
               
               <View style={styles.filterItem}>
                 <Text style={styles.filterLabel}>
-                  {selectedCategory?.id === 'hotspots' ? 'ACTION STATUS:' : 'STATUS:'}
+                  {selectedCategory?.id === 'hotspots' ? 'ACTIONS TAKEN:' : 'STATUS:'}
                 </Text>
                 <View style={styles.pickerContainer}>
                   <Picker
                     selectedValue={selectedStatus}
-                    onValueChange={setSelectedStatus}
+                    onValueChange={(value) => {
+                      console.log('Selected status:', value);
+                      setSelectedStatus(value);
+                    }}
                     style={styles.picker}
                     dropdownIconColor={COLORS.primary}
                   >
                     <Picker.Item 
-                      label={selectedCategory?.id === 'hotspots' ? 'All Action Status' : 'All Status'} 
+                      label={selectedCategory?.id === 'hotspots' ? 'All Actions Taken' : 'All Status'} 
                       value="all" 
                       style={styles.pickerItem} 
                     />
-                    {selectedCategory?.id === 'hotspots' ? (
+                    {filterOptions.statuses.length > 0 ? (
                       filterOptions.statuses.map((status) => (
                         <Picker.Item 
                           key={status} 
@@ -1011,10 +1274,15 @@ export default function Directory() {
                         />
                       ))
                     ) : (
+                      // Default status options if none are loaded
                       <>
-                        <Picker.Item label="Operating" value="Operating" />
-                        <Picker.Item label="Non-operating" value="Non-operating" />
-                        <Picker.Item label="Suspended" value="Suspended" />
+                        <Picker.Item label="Operating" value="Operating" style={styles.pickerItem} />
+                        <Picker.Item label="Non-operating" value="Non-operating" style={styles.pickerItem} />
+                        <Picker.Item label="Suspended" value="Suspended" style={styles.pickerItem} />
+                        <Picker.Item label="Expired" value="Expired" style={styles.pickerItem} />
+                        <Picker.Item label="Cancelled" value="Cancelled" style={styles.pickerItem} />
+                        <Picker.Item label="Care and Maintenance" value="Care and Maintenance" style={styles.pickerItem} />
+                        <Picker.Item label="Unknown" value="Unknown" style={styles.pickerItem} />
                       </>
                     )}
                   </Picker>
@@ -1233,35 +1501,116 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'center',
     alignItems: 'center',
+    padding: 20,
   },
   categoryModalContent: {
     backgroundColor: COLORS.white,
-    borderRadius: 20,
-    width: '90%',
-    maxHeight: '80%',
-    padding: 20,
+    borderRadius: 24,
+    width: '100%',
+    maxHeight: '90%',
+    padding: 0,
+    overflow: 'hidden',
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
   },
   categoryModalHeader: {
+    padding: 24,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+    backgroundColor: COLORS.background,
+  },
+  categoryModalHeaderContent: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    justifyContent: 'space-between',
+    width: '100%',
+  },
+  categoryModalIconContainer: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: `${COLORS.primary}15`,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 16,
+  },
+  categoryModalTitleContainer: {
+    flex: 1,
+    marginRight: 16,
   },
   categoryModalTitle: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: 'bold',
     color: COLORS.textPrimary,
+    marginBottom: 4,
+    letterSpacing: 0.5,
   },
-  categorySubtitle: {
-    fontSize: 16,
+  categoryModalSubtitle: {
+    fontSize: 14,
     color: COLORS.textSecondary,
-    marginBottom: 20,
+    lineHeight: 20,
+  },
+  categoryModalCloseButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: COLORS.white,
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    marginLeft: 16,
+  },
+  statsContainer: {
+    padding: 24,
+    backgroundColor: COLORS.white,
+  },
+  statsTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: COLORS.textPrimary,
+    marginBottom: 16,
+    letterSpacing: 0.3,
+  },
+  statsGrid: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  statCard: {
+    flex: 1,
+    padding: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    minHeight: 80,
+    justifyContent: 'center',
+  },
+  statNumber: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    marginBottom: 4,
+  },
+  statLabel: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  categoryListContainer: {
+    padding: 16,
+    paddingTop: 0,
   },
   detailModalContent: {
     backgroundColor: COLORS.white,
     borderRadius: 20,
     width: '90%',
-    maxHeight: '80%',
+    maxHeight: '85%',
+    marginBottom: 20,
   },
   detailModalHeader: {
     flexDirection: 'row',
@@ -1483,6 +1832,40 @@ const styles = StyleSheet.create({
   },
   downloadButtonText: {
     color: 'white',
+    fontSize: 12,
+    fontWeight: '600',
+    marginLeft: 4,
+  },
+  refreshButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: COLORS.primary,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    marginLeft: 8,
+  },
+  refreshButtonText: {
+    color: COLORS.primary,
+    fontSize: 12,
+    fontWeight: '600',
+    marginLeft: 4,
+  },
+  debugButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: '#ff6b6b',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    marginLeft: 8,
+  },
+  debugButtonText: {
+    color: '#ff6b6b',
     fontSize: 12,
     fontWeight: '600',
     marginLeft: 4,

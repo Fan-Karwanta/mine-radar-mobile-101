@@ -9,6 +9,9 @@ import {
 import COLORS from '../constants/colors';
 
 const DataTable = ({ data, onRowPress, category }) => {
+  // Debug log for data
+  console.log('DataTable received data:', data.slice(0, 2));
+  
   const getHeaders = () => {
     switch (category) {
       case 'national':
@@ -39,7 +42,7 @@ const DataTable = ({ data, onRowPress, category }) => {
         return [
           { key: 'permitNumber', label: 'Complaint No.', width: 140 },
           { key: 'permitHolder', label: 'Subject', width: 200 },
-          { key: 'type', label: 'Type', width: 150 },
+          { key: 'classification', label: 'Nature of Report', width: 150 },
           { key: 'commodity', label: 'Commodity', width: 140 },
           { key: 'municipality', label: 'Municipality', width: 120 },
           { key: 'province', label: 'Province', width: 100 },
@@ -62,11 +65,47 @@ const DataTable = ({ data, onRowPress, category }) => {
   const renderCell = (item, header) => {
     let cellValue = item[header.key];
     
-    // Truncate long text
-    if (typeof cellValue === 'string' && cellValue.length > 20) {
+    // Debug log for status field
+    if (header.key === 'status') {
+      console.log('Status cell value:', cellValue, 'for item:', item.permitNumber || item.id);
+    }
+    
+    // Don't truncate status field, but truncate other long text
+    if (typeof cellValue === 'string' && cellValue.length > 20 && header.key !== 'status') {
       cellValue = cellValue.substring(0, 17) + '...';
     }
 
+    // Special handling for status field
+    if (header.key === 'status') {
+      const statusValue = cellValue || 'Unknown';
+      
+      // Determine status color
+      let statusColor = '#999'; // Default gray for Unknown
+      if (statusValue) {
+        if (statusValue.toLowerCase().includes('operating') || 
+            statusValue.toLowerCase().includes('approved')) {
+          statusColor = '#4caf50'; // Green for active/operating
+        } else if (statusValue.toLowerCase().includes('expired') || 
+                   statusValue.toLowerCase().includes('denied')) {
+          statusColor = '#f44336'; // Red for expired/denied
+        } else if (statusValue.toLowerCase().includes('pending') || 
+                   statusValue.toLowerCase().includes('evaluation')) {
+          statusColor = '#ff9800'; // Orange for pending/under evaluation
+        } else {
+          statusColor = COLORS.primary; // Default to primary color
+        }
+      }
+      
+      return (
+        <View key={header.key} style={[styles.cell, { width: header.width }]}>
+          <Text style={[styles.cellText, { color: statusColor, fontWeight: '600' }]} numberOfLines={3}>
+            {statusValue}
+          </Text>
+        </View>
+      );
+    }
+    
+    // Regular fields
     return (
       <View key={header.key} style={[styles.cell, { width: header.width }]}>
         <Text style={styles.cellText} numberOfLines={2}>

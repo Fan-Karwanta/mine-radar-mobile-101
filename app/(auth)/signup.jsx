@@ -3,10 +3,12 @@ import {
   Text,
   Platform,
   KeyboardAvoidingView,
+  ScrollView,
   TextInput,
   TouchableOpacity,
   ActivityIndicator,
   Alert,
+  Image,
 } from "react-native";
 import styles from "../../assets/styles/signup.styles";
 import { Ionicons } from "@expo/vector-icons";
@@ -19,6 +21,10 @@ export default function Signup() {
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [completeName, setCompleteName] = useState("");
+  const [agency, setAgency] = useState("");
+  const [position, setPosition] = useState("");
+  const [contactNumber, setContactNumber] = useState("");
   const [showPassword, setShowPassword] = useState(false);
 
   const { user, isLoading, register, token } = useAuthStore();
@@ -26,7 +32,7 @@ export default function Signup() {
   const router = useRouter();
 
   const handleSignUp = async () => {
-    const result = await register(username, email, password);
+    const result = await register(username, email, password, completeName, agency, position, contactNumber);
 
     if (result.success) {
       router.replace("/(tabs)/directory");
@@ -40,21 +46,49 @@ export default function Signup() {
       style={{ flex: 1 }}
       behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
-      <View style={styles.container}>
+      <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+        {/* BACKGROUND IMAGE */}
+        <Image
+          source={require("../../assets/images/mgb-logo.png")}
+          style={styles.backgroundImage}
+          resizeMode="contain"
+        />
+        
         <View style={styles.card}>
           {/* HEADER */}
           <View style={styles.header}>
-            <Text style={styles.title}>MineRadar ⛏️</Text>
-            <Text style={styles.subtitle}>Share your favorite reads</Text>
+            <Text style={styles.title}>Mine Radar ⛏️</Text>
+            <Text style={styles.subtitle}>Create your account</Text>
           </View>
 
           <View style={styles.formContainer}>
+            {/* COMPLETE NAME INPUT */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Complete Name (Surname, First Name, M.I.)</Text>
+              <View style={styles.inputContainer}>
+                <Ionicons
+                  name="person-outline"
+                  size={20}
+                  color={COLORS.primary}
+                  style={styles.inputIcon}
+                />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Dela Cruz, Juan P."
+                  placeholderTextColor={COLORS.placeholderText}
+                  value={completeName}
+                  onChangeText={setCompleteName}
+                  autoCapitalize="words"
+                />
+              </View>
+            </View>
+
             {/* USERNAME INPUT */}
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Username</Text>
               <View style={styles.inputContainer}>
                 <Ionicons
-                  name="person-outline"
+                  name="at-outline"
                   size={20}
                   color={COLORS.primary}
                   style={styles.inputIcon}
@@ -88,6 +122,69 @@ export default function Signup() {
                   onChangeText={setEmail}
                   keyboardType="email-address"
                   autoCapitalize="none"
+                />
+              </View>
+            </View>
+
+            {/* AGENCY/COMPANY INPUT */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Agency/Company</Text>
+              <View style={styles.inputContainer}>
+                <Ionicons
+                  name="business-outline"
+                  size={20}
+                  color={COLORS.primary}
+                  style={styles.inputIcon}
+                />
+                <TextInput
+                  style={styles.input}
+                  placeholder="DENR"
+                  placeholderTextColor={COLORS.placeholderText}
+                  value={agency}
+                  onChangeText={setAgency}
+                  autoCapitalize="words"
+                />
+              </View>
+            </View>
+
+            {/* POSITION/DESIGNATION INPUT */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Position/Designation</Text>
+              <View style={styles.inputContainer}>
+                <Ionicons
+                  name="briefcase-outline"
+                  size={20}
+                  color={COLORS.primary}
+                  style={styles.inputIcon}
+                />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Secretary"
+                  placeholderTextColor={COLORS.placeholderText}
+                  value={position}
+                  onChangeText={setPosition}
+                  autoCapitalize="words"
+                />
+              </View>
+            </View>
+
+            {/* CONTACT NUMBER INPUT */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Contact Number</Text>
+              <View style={styles.inputContainer}>
+                <Ionicons
+                  name="call-outline"
+                  size={20}
+                  color={COLORS.primary}
+                  style={styles.inputIcon}
+                />
+                <TextInput
+                  style={styles.input}
+                  placeholder="+63 912 345 6789"
+                  placeholderTextColor={COLORS.placeholderText}
+                  value={contactNumber}
+                  onChangeText={setContactNumber}
+                  keyboardType="phone-pad"
                 />
               </View>
             </View>
@@ -141,7 +238,7 @@ export default function Signup() {
             </View>
           </View>
         </View>
-      </View>
+      </ScrollView>
     </KeyboardAvoidingView>
   );
 }

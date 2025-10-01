@@ -83,9 +83,22 @@ class ReportService {
           break;
       }
       
-      // Add attachments from reportData.attachments
+      // Add attachments from reportData.attachments (already uploaded to Cloudinary)
       if (reportData.attachments && reportData.attachments.length > 0) {
-        reportData.attachments.forEach((attachment, index) => {
+        // Send as JSON string since images are already uploaded to Cloudinary
+        formData.append('cloudinaryAttachments', JSON.stringify(
+          reportData.attachments.map(att => ({
+            filename: att.publicId || `image_${Date.now()}`,
+            path: att.url, // Cloudinary URL
+            uploadedAt: att.uploadedAt || new Date().toISOString(),
+            geotagged: att.geotagged || false
+          }))
+        ));
+      }
+      
+      // Add legacy attachments parameter if provided (for backward compatibility)
+      if (attachments && attachments.length > 0) {
+        attachments.forEach((attachment, index) => {
           if (attachment.uri) {
             formData.append('attachments', {
               uri: attachment.uri,
@@ -96,16 +109,7 @@ class ReportService {
         });
       }
       
-      // Add legacy attachments parameter if provided
-      if (attachments && attachments.length > 0) {
-        attachments.forEach((attachment, index) => {
-          formData.append('attachments', {
-            uri: attachment.uri,
-            type: attachment.type || 'image/jpeg',
-            name: attachment.name || `attachment_${index}.jpg`
-          });
-        });
-      }
+      console.log('🌐 Sending report to:', `${API_BASE_URL}/reports`);
       
       const response = await fetch(`${API_BASE_URL}/reports`, {
         method: 'POST',
@@ -113,15 +117,28 @@ class ReportService {
         // Don't set Content-Type header - let fetch handle it for FormData
       });
       
-      const result = await response.json();
+      console.log('📨 Response status:', response.status);
+      
+      // Try to parse response as JSON
+      let result;
+      try {
+        const responseText = await response.text();
+        console.log('📨 Response body:', responseText);
+        result = JSON.parse(responseText);
+      } catch (parseError) {
+        console.error('❌ Failed to parse response:', parseError);
+        throw new Error('Invalid response from server');
+      }
       
       if (!response.ok) {
-        throw new Error(result.message || 'Failed to submit report');
+        console.error('❌ Server error:', result);
+        throw new Error(result.message || `Server error: ${response.status}`);
       }
       
       return result;
     } catch (error) {
-      console.error('Error submitting report:', error);
+      console.error('❌ Error submitting report:', error);
+      console.error('Error message:', error.message);
       throw error;
     }
   }

@@ -1,4 +1,5 @@
 import * as ImagePicker from 'expo-image-picker';
+import * as FileSystem from 'expo-file-system';
 import { Alert } from 'react-native';
 import { API_BASE_URL } from '../constants/api';
 
@@ -172,49 +173,69 @@ class ImageService {
 
   async uploadToCloudinary(imageData) {
     try {
-      const formData = new FormData();
-      
-      formData.append('image', {
-        uri: imageData.uri,
-        type: imageData.type,
-        name: imageData.name
-      });
+      console.log('🌐 Uploading via backend to Cloudinary...');
+      console.log('📦 Image:', imageData.name);
+      console.log('📍 URI:', imageData.uri);
 
-      // Add metadata
+      // Prepare form data fields
+      const uploadOptions = {
+        httpMethod: 'POST',
+        uploadType: FileSystem.FileSystemUploadType.MULTIPART,
+        fieldName: 'image',
+        headers: {
+          'Accept': 'application/json',
+        },
+      };
+
+      // Add geo data if available
       if (imageData.geotagged && imageData.exif) {
         const geoData = this.extractGeoData(imageData.exif);
         if (geoData) {
-          formData.append('geoData', JSON.stringify(geoData));
+          uploadOptions.parameters = {
+            geoData: JSON.stringify(geoData)
+          };
         }
       }
 
-      const response = await fetch(`${API_BASE_URL}/upload/image`, {
-        method: 'POST',
-        body: formData,
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-      });
+      console.log('📡 Uploading to:', `${API_BASE_URL}/upload/image`);
 
-      const result = await response.json();
+      // Use FileSystem.uploadAsync for proper React Native file upload
+      const uploadResult = await FileSystem.uploadAsync(
+        `${API_BASE_URL}/upload/image`,
+        imageData.uri,
+        uploadOptions
+      );
 
-      if (!response.ok) {
+      console.log('📨 Upload response status:', uploadResult.status);
+      console.log('📨 Upload response body:', uploadResult.body);
+
+      if (uploadResult.status !== 200) {
+        throw new Error(`Upload failed with status ${uploadResult.status}`);
+      }
+
+      const result = JSON.parse(uploadResult.body);
+
+      if (!result.success) {
+        console.error('❌ Backend error:', result);
         throw new Error(result.message || 'Failed to upload image');
       }
+
+      console.log('✅ Upload successful:', result.url);
 
       return {
         success: true,
         url: result.url,
         publicId: result.publicId,
-        geotagged: imageData.geotagged,
+        geotagged: result.geotagged || imageData.geotagged,
         originalName: imageData.name,
-        size: imageData.size
+        size: imageData.size,
+        uploadedAt: result.uploadedAt || new Date().toISOString()
       };
     } catch (error) {
-      console.error('Error uploading to Cloudinary:', error);
+      console.error('❌ Error uploading:', error);
       return {
         success: false,
-        error: error.message
+        error: error.message || 'Upload failed'
       };
     }
   }

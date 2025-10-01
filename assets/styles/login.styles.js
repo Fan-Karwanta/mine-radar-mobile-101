@@ -10,6 +10,17 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.background,
     padding: 20,
     justifyContent: "center",
+    position: "relative",
+  },
+  backgroundImage: {
+    position: "absolute",
+    top: "30%",
+    left: "57.5%",
+    transform: [{ translateX: -width * 0.5 }, { translateY: -width * 0.5 }],
+    width: width * 1.0,
+    height: width * 1.0,
+    opacity: 0.08,
+    zIndex: 0,
   },
   scrollViewStyle: {
     flex: 1,
@@ -18,6 +29,7 @@ const styles = StyleSheet.create({
   topIllustration: {
     alignItems: "center",
     width: "100%",
+    zIndex: 1,
   },
   illustrationImage: {
     width: width * 0.75,
@@ -35,6 +47,7 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: COLORS.border,
     marginTop: -24,
+    zIndex: 2,
   },
   header: {
     alignItems: "center",

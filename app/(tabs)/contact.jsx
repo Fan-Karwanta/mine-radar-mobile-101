@@ -72,20 +72,19 @@ export default function Contact() {
 
       {/* Office Information */}
       <InfoCard title="Office Information">
-        <ContactCard
-          icon="business-outline"
-          title="MGB CALABARZON Regional Office"
-          subtitle="Mines and Geosciences Bureau"
-          onPress={() => {}}
-          actionIcon="information-circle-outline"
-        />
+        <View style={styles.officeNameContainer}>
+          <Ionicons name="business" size={24} color={COLORS.primary} />
+          <Text style={styles.officeName}>
+            Mines and Geosciences Bureau Regional Office No. IV CALABARZON
+          </Text>
+        </View>
         
         <View style={styles.addressContainer}>
-          <Ionicons name="location-outline" size={20} color={COLORS.textSecondary} />
+          <Ionicons name="location" size={20} color={COLORS.textSecondary} />
           <View style={styles.addressText}>
-            <Text style={styles.addressLine}>2nd Floor, DENR Building</Text>
-            <Text style={styles.addressLine}>Brgy. Diezmo, Cabuyao City</Text>
-            <Text style={styles.addressLine}>Laguna 4025, Philippines</Text>
+            <Text style={styles.addressLine}>2nd floor Puregold Jr. Bldg., 11 National Road,</Text>
+            <Text style={styles.addressLine}>Brgy Parian, Calamba City,</Text>
+            <Text style={styles.addressLine}>Laguna Province</Text>
           </View>
         </View>
       </InfoCard>
@@ -95,86 +94,44 @@ export default function Contact() {
         <ContactCard
           icon="call-outline"
           title="Phone"
-          subtitle="+63 (49) 834-4074"
-          onPress={() => handleCall('+6349834407')}
+          subtitle="(049) 542-4421"
+          onPress={() => handleCall('0495424421')}
           actionIcon="call"
         />
         
         <ContactCard
           icon="mail-outline"
           title="Email"
-          subtitle="mgb4a@mgb.gov.ph"
-          onPress={() => handleEmail('mgb4a@mgb.gov.ph')}
-          actionIcon="mail"
-        />
-        
-        <ContactCard
-          icon="globe-outline"
-          title="Website"
-          subtitle="www.mgb.gov.ph"
-          onPress={() => handleWebsite('https://www.mgb.gov.ph')}
-          actionIcon="open-outline"
-        />
-      </InfoCard>
-
-      {/* Office Hours */}
-      <InfoCard title="Office Hours">
-        <View style={styles.hoursContainer}>
-          <View style={styles.hoursRow}>
-            <Text style={styles.hoursDay}>Monday - Friday</Text>
-            <Text style={styles.hoursTime}>8:00 AM - 5:00 PM</Text>
-          </View>
-          <View style={styles.hoursRow}>
-            <Text style={styles.hoursDay}>Saturday - Sunday</Text>
-            <Text style={styles.hoursTime}>Closed</Text>
-          </View>
-          <View style={styles.hoursNote}>
-            <Ionicons name="information-circle-outline" size={16} color={COLORS.textSecondary} />
-            <Text style={styles.hoursNoteText}>
-              Lunch break: 12:00 PM - 1:00 PM
-            </Text>
-          </View>
-        </View>
-      </InfoCard>
-
-      {/* Services */}
-      <InfoCard title="Our Services">
-        <View style={styles.servicesContainer}>
-          <View style={styles.serviceItem}>
-            <Ionicons name="document-text-outline" size={20} color={COLORS.primary} />
-            <Text style={styles.serviceText}>Mining Permits & Applications</Text>
-          </View>
-          <View style={styles.serviceItem}>
-            <Ionicons name="shield-checkmark-outline" size={20} color={COLORS.primary} />
-            <Text style={styles.serviceText}>Environmental Compliance</Text>
-          </View>
-          <View style={styles.serviceItem}>
-            <Ionicons name="search-outline" size={20} color={COLORS.primary} />
-            <Text style={styles.serviceText}>Mining Investigations</Text>
-          </View>
-          <View style={styles.serviceItem}>
-            <Ionicons name="library-outline" size={20} color={COLORS.primary} />
-            <Text style={styles.serviceText}>Geological Surveys</Text>
-          </View>
-        </View>
-      </InfoCard>
-
-      {/* Contact Directory */}
-      <InfoCard title="Contact Directory">
-        <Text style={styles.contactDirectoryDescription}>
-          Contact information for MGB offices and PMRB regional branches. Send messages directly to admin panel or email.
-        </Text>
-        
-        <ContactCard
-          icon="business-outline"
-          title="MGB IV CALABARZON"
           subtitle="region4a@mgb.gov.ph"
           onPress={() => handleEmail('region4a@mgb.gov.ph')}
           actionIcon="mail"
         />
         
         <ContactCard
-          icon="location-outline"
+          icon="globe-outline"
+          title="Website"
+          subtitle="https://region4a.mgb.gov.ph"
+          onPress={() => handleWebsite('https://region4a.mgb.gov.ph')}
+          actionIcon="open-outline"
+        />
+
+        <ContactCard
+          icon="logo-facebook"
+          title="Facebook"
+          subtitle="MGB CALABARZON"
+          onPress={() => handleWebsite('https://www.facebook.com/mgbcalabarzon')}
+          actionIcon="open-outline"
+        />
+      </InfoCard>
+
+      {/* Provincial Mining Regulatory Boards */}
+      <InfoCard title="Provincial Mining Regulatory Boards">
+        <Text style={styles.contactDirectoryDescription}>
+          Contact information for Provincial Mining Regulatory Boards in CALABARZON region.
+        </Text>
+        
+        <ContactCard
+          icon="mail-outline"
           title="PMRB Rizal"
           subtitle="pmrb.rizal95@gmail.com"
           onPress={() => handleEmail('pmrb.rizal95@gmail.com')}
@@ -182,7 +139,7 @@ export default function Contact() {
         />
         
         <ContactCard
-          icon="location-outline"
+          icon="mail-outline"
           title="PMRB Cavite"
           subtitle="pmrbcavite@gmail.com"
           onPress={() => handleEmail('pmrbcavite@gmail.com')}
@@ -190,7 +147,7 @@ export default function Contact() {
         />
         
         <ContactCard
-          icon="location-outline"
+          icon="mail-outline"
           title="PMRB Laguna"
           subtitle="pmrblaguna@gmail.com"
           onPress={() => handleEmail('pmrblaguna@gmail.com')}
@@ -198,7 +155,7 @@ export default function Contact() {
         />
         
         <ContactCard
-          icon="location-outline"
+          icon="mail-outline"
           title="PMRB Quezon"
           subtitle="quezon.pmrb@gmail.com"
           onPress={() => handleEmail('quezon.pmrb@gmail.com')}
@@ -206,32 +163,12 @@ export default function Contact() {
         />
         
         <ContactCard
-          icon="location-outline"
+          icon="mail-outline"
           title="PMRB Batangas"
           subtitle="miningsection_pgenro@yahoo.com"
           onPress={() => handleEmail('miningsection_pgenro@yahoo.com')}
           actionIcon="mail"
         />
-      </InfoCard>
-
-      {/* Emergency Contact */}
-      <InfoCard title="Emergency Contact">
-        <View style={styles.emergencyContainer}>
-          <View style={styles.emergencyHeader}>
-            <Ionicons name="warning-outline" size={24} color="#FF5722" />
-            <Text style={styles.emergencyTitle}>Report Mining Violations</Text>
-          </View>
-          <Text style={styles.emergencyDescription}>
-            For urgent mining violations or environmental emergencies, contact us immediately:
-          </Text>
-          <TouchableOpacity
-            style={styles.emergencyButton}
-            onPress={() => handleCall('09171234567')}
-          >
-            <Ionicons name="call" size={20} color={COLORS.white} />
-            <Text style={styles.emergencyButtonText}>Emergency Hotline: 0917-123-4567</Text>
-          </TouchableOpacity>
-        </View>
       </InfoCard>
 
       {/* Bottom Spacing */}
@@ -309,6 +246,21 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: COLORS.textSecondary,
   },
+  officeNameContainer: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  officeName: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '600',
+    color: COLORS.textPrimary,
+    lineHeight: 22,
+  },
   addressContainer: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -322,50 +274,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: COLORS.textSecondary,
     lineHeight: 20,
-  },
-  hoursContainer: {
-    gap: 12,
-  },
-  hoursRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  hoursDay: {
-    fontSize: 14,
-    color: COLORS.textPrimary,
-    fontWeight: '600',
-  },
-  hoursTime: {
-    fontSize: 14,
-    color: COLORS.textSecondary,
-  },
-  hoursNote: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginTop: 8,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.border,
-  },
-  hoursNoteText: {
-    fontSize: 12,
-    color: COLORS.textSecondary,
-    fontStyle: 'italic',
-  },
-  servicesContainer: {
-    gap: 12,
-  },
-  serviceItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  serviceText: {
-    fontSize: 14,
-    color: COLORS.textPrimary,
-    flex: 1,
   },
   feedbackForm: {
     gap: 16,
@@ -390,53 +298,6 @@ const styles = StyleSheet.create({
   textArea: {
     height: 100,
     textAlignVertical: 'top',
-  },
-  submitButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: COLORS.primary,
-    paddingVertical: 12,
-    borderRadius: 8,
-    gap: 8,
-    marginTop: 8,
-  },
-  submitButtonText: {
-    fontSize: 16,
-    color: COLORS.white,
-    fontWeight: '600',
-  },
-  emergencyContainer: {
-    gap: 12,
-  },
-  emergencyHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  emergencyTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#FF5722',
-  },
-  emergencyDescription: {
-    fontSize: 14,
-    color: COLORS.textSecondary,
-    lineHeight: 20,
-  },
-  emergencyButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#FF5722',
-    paddingVertical: 12,
-    borderRadius: 8,
-    gap: 8,
-  },
-  emergencyButtonText: {
-    fontSize: 14,
-    color: COLORS.white,
-    fontWeight: '600',
   },
   bottomSpacing: {
     height: 20,

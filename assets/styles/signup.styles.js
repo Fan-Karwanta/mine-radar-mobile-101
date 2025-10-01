@@ -1,18 +1,32 @@
 // styles/signup.styles.js
-import { StyleSheet } from "react-native";
+import { StyleSheet, Dimensions } from "react-native";
 import COLORS from "../../constants/colors";
+
+const { width } = Dimensions.get("window");
 
 const styles = StyleSheet.create({
   container: {
     flexGrow: 1,
     backgroundColor: COLORS.background,
     padding: 20,
-    justifyContent: "center",
+    position: "relative",
+  },
+  backgroundImage: {
+    position: "absolute",
+    top: "10%",
+    left: "51.3%",
+    transform: [{ translateX: -width * 0.5 }, { translateY: -width * 0.5 }],
+    width: width * 1.0,
+    height: width * 1.0,
+    opacity: 0.08,
+    zIndex: 0,
   },
   card: {
     backgroundColor: COLORS.cardBackground,
     borderRadius: 16,
     padding: 24,
+    marginTop: 40,
+    marginBottom: 40,
     shadowColor: COLORS.black,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
@@ -20,6 +34,7 @@ const styles = StyleSheet.create({
     elevation: 4,
     borderWidth: 2,
     borderColor: COLORS.border,
+    zIndex: 1,
   },
   header: {
     alignItems: "center",

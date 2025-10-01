@@ -13,6 +13,7 @@ import {
   Picker,
   RefreshControl,
   ActivityIndicator,
+  Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import COLORS from '../../constants/colors';
@@ -31,8 +32,8 @@ const illegalMiningTranslations = {
     getCoordinates: 'Get Coordinates from Google Maps',
     location: 'Location:',
     locationPlaceholder: 'Sitio/Barangay/Municipality/City/Province',
-    date: 'Date:',
-    time: 'Time:',
+    date: 'Date Observed:',
+    time: 'Time Observed:',
     usePhoneDateTime: "Use phone's time and date",
     projectBoard: 'Is there a Project Information Board on Site? (check one box)',
     noSignboard: 'No signboard observed',
@@ -40,10 +41,9 @@ const illegalMiningTranslations = {
     projectName: 'If yes, please indicate the name of the project:',
     commodity: 'Commodity:',
     commodityPlaceholder: 'Sand and Gravel/Filling Materials/Construction Aggregates/Rocks/Sand/Boulders/Base Course/Common Soil/Limestone/Silica/Others',
-    siteStatus: 'Site Status during Verification: (dropdown box)',
+    siteStatus: 'Site Status during Verification:',
     operating: 'Operating',
     nonOperating: 'Non-operating',
-    operatingNote: '(If operating status, this checklist will appear)',
     activitiesObserved: 'Activities observed in the area: (check all that apply)',
     extraction: 'Extraction',
     extractionEquipment: 'Backhoe/Mini Backhoe/Excavator/Shovel/Front-end Loader/',
@@ -54,7 +54,6 @@ const illegalMiningTranslations = {
     operatorName: 'Name of Operator/s:',
     operatorAddress: 'Address of Operator/s:',
     operatorDetermination: 'How did you determine the operator/s in the area?',
-    nonOperatingNote: '(If non-operating status, this checklist will appear)',
     observations: 'Observations in the area: (check all that apply)',
     excavations: 'Excavations',
     accessRoad: 'Access road for transport',
@@ -87,8 +86,8 @@ const illegalMiningTranslations = {
     getCoordinates: 'Kunin ang coordinates mula sa Google Maps',
     location: 'Lokasyon:',
     locationPlaceholder: 'Sitio/Barangay/Municipality/City/Province',
-    date: 'Petsa:',
-    time: 'Oras:',
+    date: 'Petsang Naobserbahan:',
+    time: 'Oras na Naobserbahan:',
     usePhoneDateTime: 'Gamitin ang oras at petsa ng telepono',
     projectBoard: 'May Project Information Board ba sa Lugar?',
     noSignboard: 'Walang nakita na karatula',
@@ -99,7 +98,6 @@ const illegalMiningTranslations = {
     siteStatus: 'Kalagayan ng lugar sa oras ng pagbisita:',
     operating: 'May operasyon',
     nonOperating: 'Walang operasyon',
-    operatingNote: '(Kung may operasyon, lalabas ang checklist na ito)',
     activitiesObserved: 'Mga Aktibidad na Naobserbahan (piliin lahat ng naaangkop):',
     extraction: 'Pagbubungkal o Paghuhukay',
     extractionEquipment: 'Backhoe/Mini Backhoe/Excavator/Shovel/Front-end Loader/Others',
@@ -110,7 +108,6 @@ const illegalMiningTranslations = {
     operatorName: 'Pangalan ng Operator:',
     operatorAddress: 'Address ng Operator:',
     operatorDetermination: 'Paano mo natukoy kung sino ang operator?',
-    nonOperatingNote: '(Kung walang operasyon, lalabas ang checklist na ito)',
     observations: 'Mga Naobserbahang Kalagayan sa Lugar:',
     excavations: 'Bagong hukay na palatandaan ng pagmimina',
     accessRoad: 'Daanan ng mga Dump Truck',
@@ -147,8 +144,8 @@ const illegalTransportTranslations = {
     getCoordinates: 'Get Coordinates from Google Maps',
     location: 'Location:',
     locationPlaceholder: 'Insert Sitio, Barangay, Municipality/City, Province',
-    date: 'Date:',
-    time: 'Time:',
+    date: 'Date Observed:',
+    time: 'Time Observed:',
     usePhoneDateTime: "Use phone's time and date",
     violationType: 'Type of Violation? (check one box)',
     absenceDocuments: 'Absence or failure to carry transport documents',
@@ -187,8 +184,8 @@ const illegalTransportTranslations = {
     getCoordinates: 'Kunin ang coordinates mula sa Google Maps',
     location: 'Lokasyon:',
     locationPlaceholder: 'Ilagay ang Sitio, Barangay, Municipality/City, Province',
-    date: 'Petsa:',
-    time: 'Oras:',
+    date: 'Petsang Naobserbahan:',
+    time: 'Oras na Naobserbahan:',
     usePhoneDateTime: 'Gamitin ang oras at petsa ng telepono',
     violationType: 'Uri ng Paglabag? (piliin isa)',
     absenceDocuments: 'Kawalan o pagkakapalyang magdala ng transport documents',
@@ -231,8 +228,8 @@ const illegalProcessingTranslations = {
     getCoordinates: 'Get Coordinates from Google Maps',
     location: 'Location:',
     locationPlaceholder: 'Insert Sitio, Barangay, Municipality/City, Province',
-    date: 'Date:',
-    time: 'Time:',
+    date: 'Date Observed:',
+    time: 'Time Observed:',
     usePhoneDateTime: "Use phone's time and date",
     projectBoard: 'Is there a Project Information Board on Site?',
     noSignboard: 'No signboard observed',
@@ -268,8 +265,8 @@ const illegalProcessingTranslations = {
     getCoordinates: 'Kunin ang coordinates mula sa Google Maps',
     location: 'Lokasyon:',
     locationPlaceholder: 'Ilagay ang Sitio, Barangay, Municipality/City, Province',
-    date: 'Petsa:',
-    time: 'Oras:',
+    date: 'Petsang Naobserbahan:',
+    time: 'Oras na Naobserbahan:',
     usePhoneDateTime: 'Gamitin ang oras at petsa ng telepono',
     projectBoard: 'May Project Information Board ba sa Lugar?',
     noSignboard: 'Walang nakita na karatula',
@@ -309,8 +306,8 @@ const illegalTradingTranslations = {
     getCoordinates: 'Get Coordinates from Google Maps',
     location: 'Location:',
     locationPlaceholder: 'Sitio/Barangay/Municipality/City/Province',
-    date: 'Date:',
-    time: 'Time:',
+    date: 'Date Observed:',
+    time: 'Time Observed:',
     usePhoneDateTime: 'Use phones time and date',
     violationType: 'Type of Violation:',
     tradingViolation: 'Trading of mineral products without valid permit',
@@ -344,8 +341,8 @@ const illegalTradingTranslations = {
     getCoordinates: 'Kunin ang Coordinates mula sa Google Maps',
     location: 'Lokasyon:',
     locationPlaceholder: 'Sitio/Barangay/Municipality/City/Province',
-    date: 'Petsa:',
-    time: 'Oras:',
+    date: 'Petsang Naobserbahan:',
+    time: 'Oras na Naobserbahan:',
     usePhoneDateTime: 'Gamitin ang oras at petsa ng telepono',
     violationType: 'Uri ng Paglabag:',
     tradingViolation: 'Pagbebenta ng mineral products na walang valid permit',
@@ -383,8 +380,8 @@ const illegalExplorationTranslations = {
       getCoordinates: 'Get Coordinates from Google Maps',
       location: 'Location:',
       locationPlaceholder: 'Sitio/Barangay/Municipality/City/Province',
-      date: 'Date:',
-      time: 'Time:',
+      date: 'Date Observed:',
+      time: 'Time Observed:',
       usePhoneDateTime: 'Use phones time and date',
       projectInfoBoard: 'Is there a Project Information Board on Site? (check one box)',
       noSignboard: 'No signboard observed',
@@ -416,8 +413,8 @@ const illegalExplorationTranslations = {
       getCoordinates: 'Kunin ang Coordinates mula sa Google Maps',
       location: 'Lokasyon:',
       locationPlaceholder: 'Sitio/Barangay/Municipality/City/Province',
-      date: 'Petsa:',
-      time: 'Oras:',
+      date: 'Petsang Naobserbahan:',
+      time: 'Oras na Naobserbahan:',
       usePhoneDateTime: 'Gamitin ang oras at petsa ng telepono',
       projectInfoBoard: 'May Project Information Board ba sa Site? (piliin ang isa)',
       noSignboard: 'Walang signboard na nakita',
@@ -609,9 +606,9 @@ const violationCategories = [
   },
   {
     id: 'illegal_smallscale',
-    english: 'Illegal Small-Scale Mining of Gold',
-    filipino: 'Ilegal na Maliitang Pagmimina ng Ginto',
-    description: 'Unauthorized small-scale gold mining'
+    english: 'Illegal Small-Scale Mining',
+    filipino: 'Ilegal na Maliitang Pagmimina',
+    description: 'Unauthorized small-scale mining'
   }
 ];
 
@@ -694,6 +691,7 @@ export default function Reports() {
     hasSignboard: null, // null, true, false
     projectName: '',
     commodity: '',
+    commodityOther: '',
     siteStatus: 'operating',
     activities: {
       extraction: false,
@@ -734,9 +732,12 @@ export default function Reports() {
     violationType: null, // 'absence', 'outdated', 'fraudulent'
     documentType: '',
     commodity: '',
+    commodityOther: '',
     volumeWeight: '',
     unit: '',
+    unitOther: '',
     vehicleType: '',
+    vehicleTypeOther: '',
     vehicleDescription: '',
     vehicleBodyColor: '',
     plateNumber: '',
@@ -782,6 +783,7 @@ export default function Reports() {
     businessOwner: '',
     businessLocation: '',
     commodity: '',
+    commodityOther: '',
     sourceOfCommodityName: '',
     sourceOfCommodityLocation: '',
     sourceOfCommodityDetermination: '',
@@ -824,6 +826,7 @@ export default function Reports() {
     hasSignboard: null, // null, 'no_signboard', 'not_determined', 'yes'
     projectName: '',
     commodity: '',
+    commodityOther: '',
     siteStatus: 'operating', // 'operating', 'nonOperating'
     // Operating status activities
     activities: {
@@ -1992,10 +1995,15 @@ export default function Reports() {
     if (isUploadingImages) return;
 
     try {
+      setIsUploadingImages(true);
+      
       // First, pick images for preview
       const images = await imageService.pickImagesForPreview(5);
       
-      if (images.length === 0) return;
+      if (images.length === 0) {
+        setIsUploadingImages(false);
+        return;
+      }
 
       // Validate image sizes
       const oversizedImages = images.filter(img => {
@@ -2009,26 +2017,54 @@ export default function Reports() {
           `${oversizedImages.length} image(s) exceed the 10MB size limit. Please select smaller images.`,
           [{ text: 'OK' }]
         );
+        setIsUploadingImages(false);
         return;
       }
 
-      // Add images to preview state immediately
-      setUploadedImages(prev => [...prev, ...images]);
-
-      // Show success message for image selection
-      Alert.alert(
-        'Images Selected',
-        `${images.length} image(s) selected and ready for upload. They will be uploaded when you submit the report.`,
-        [{ text: 'OK' }]
-      );
+      // Upload images to Cloudinary immediately
+      console.log('📤 Uploading images to Cloudinary...');
+      const uploadResults = await imageService.uploadMultipleImages(images);
+      
+      if (uploadResults.successful && uploadResults.successful.length > 0) {
+        // Add successfully uploaded images with Cloudinary URLs
+        const uploadedImagesWithUrls = uploadResults.successful.map(result => ({
+          id: `uploaded_${Date.now()}_${Math.random()}`,
+          url: result.url,
+          publicId: result.publicId,
+          geotagged: result.geotagged,
+          isUploaded: true,
+          uploadedAt: result.uploadedAt || new Date().toISOString()
+        }));
+        
+        setUploadedImages(prev => [...prev, ...uploadedImagesWithUrls]);
+        
+        console.log('✅ Images uploaded successfully:', uploadedImagesWithUrls.length);
+        
+        Alert.alert(
+          'Upload Successful',
+          `${uploadResults.successful.length} image(s) uploaded successfully to Cloudinary!`,
+          [{ text: 'OK' }]
+        );
+      }
+      
+      if (uploadResults.failed && uploadResults.failed.length > 0) {
+        console.error('❌ Failed to upload some images:', uploadResults.failed);
+        Alert.alert(
+          'Upload Warning',
+          `${uploadResults.failed.length} image(s) failed to upload. Please try again.`,
+          [{ text: 'OK' }]
+        );
+      }
 
     } catch (error) {
-      console.error('Error selecting images:', error);
+      console.error('Error uploading images:', error);
       Alert.alert(
-        'Selection Error',
-        'An error occurred while selecting images. Please try again.',
+        'Upload Error',
+        'An error occurred while uploading images. Please check your internet connection and try again.',
         [{ text: 'OK' }]
       );
+    } finally {
+      setIsUploadingImages(false);
     }
   };
 
@@ -2202,12 +2238,7 @@ export default function Reports() {
         currentFormData = formData;
     }
 
-    // Basic validation
-    if (!currentFormData.latitude || !currentFormData.longitude || !currentFormData.location) {
-      Alert.alert('Validation Error', 'GPS coordinates and location are required.');
-      return;
-    }
-
+    // Basic validation - Date and time are required
     if (!currentFormData.date || !currentFormData.time) {
       Alert.alert('Validation Error', 'Date and time are required.');
       return;
@@ -2216,17 +2247,19 @@ export default function Reports() {
     setIsSubmitting(true);
 
     try {
-      // First, upload any selected images that haven't been uploaded yet
+      // Use already uploaded images (they were uploaded when selected)
       let finalAttachments = [];
       if (uploadedImages.length > 0) {
-        const uploadedImageResults = await uploadSelectedImages(uploadedImages);
-        finalAttachments = uploadedImageResults.map(img => ({
+        // Images are already uploaded to Cloudinary, just format them
+        finalAttachments = uploadedImages.map(img => ({
           url: img.url,
           publicId: img.publicId,
           type: 'image',
           geotagged: img.geotagged || false,
-          uploadedAt: img.uploadedAt
+          uploadedAt: img.uploadedAt || new Date().toISOString()
         }));
+        
+        console.log('📎 Attaching uploaded images to report:', finalAttachments.length);
       }
 
       const reportData = {
@@ -2237,7 +2270,15 @@ export default function Reports() {
         attachments: finalAttachments
       };
 
+      console.log('📤 Submitting report data:', {
+        type: reportData.type,
+        hasAttachments: reportData.attachments?.length || 0,
+        location: reportData.location
+      });
+
       const result = await reportService.submitReport(reportData);
+      
+      console.log('📨 Submit result:', result);
       
       if (result.success) {
         // If this was a draft being submitted, delete it from drafts
@@ -2267,11 +2308,13 @@ export default function Reports() {
           }
         ]);
       } else {
+        console.error('❌ Submit failed:', result.message);
         Alert.alert('Error', result.message || 'Failed to submit report');
       }
     } catch (error) {
-      console.error('Error submitting report:', error);
-      Alert.alert('Error', 'An error occurred while submitting the report');
+      console.error('❌ Error submitting report:', error);
+      console.error('Error details:', error.message, error.stack);
+      Alert.alert('Error', error.message || 'An error occurred while submitting the report');
     } finally {
       setIsSubmitting(false);
     }
@@ -2751,7 +2794,11 @@ export default function Reports() {
           {item.submittedBy && (
             <View style={styles.infoRow}>
               <Ionicons name="person-outline" size={16} color={COLORS.textSecondary} />
-              <Text style={styles.infoText} numberOfLines={1}>{item.submittedBy}</Text>
+              <Text style={styles.infoText} numberOfLines={1}>
+                {typeof item.submittedBy === 'object' 
+                  ? (item.submittedBy.email || item.submittedBy.completeName || item.submittedBy.username || 'Unknown User')
+                  : item.submittedBy}
+              </Text>
             </View>
           )}
         </View>
@@ -2859,7 +2906,11 @@ export default function Reports() {
               {/* Submitted By */}
               <View style={styles.detailSection}>
                 <Text style={styles.detailLabel}>Submitted By</Text>
-                <Text style={styles.detailValue}>{selectedReport.submittedBy}</Text>
+                <Text style={styles.detailValue}>
+                  {typeof selectedReport.submittedBy === 'object'
+                    ? `${selectedReport.submittedBy.completeName || selectedReport.submittedBy.username || 'Unknown User'} (${selectedReport.submittedBy.email || 'No email'})`
+                    : selectedReport.submittedBy}
+                </Text>
               </View>
               
               {/* Submitted Date */}
@@ -3140,9 +3191,7 @@ export default function Reports() {
           disabled={isLoadingTransportationLocation}
         >
           {isLoadingTransportationLocation && (
-            <View style={styles.loadingContainer}>
-              <View style={styles.spinner} />
-            </View>
+            <ActivityIndicator size="small" color="#2196F3" style={styles.buttonSpinner} />
           )}
           <Text style={styles.getLocationText}>
             {isLoadingTransportationLocation ? 'Getting Location...' : t.getCoordinates}
@@ -3227,13 +3276,59 @@ export default function Reports() {
       {/* Commodity */}
       <View style={styles.checklistSection}>
         <Text style={styles.sectionLabel}>{t.commodity}</Text>
-        <TextInput 
-          style={styles.textInput}
-          placeholder={t.commodityPlaceholder}
-          value={formData.commodity}
-          onChangeText={(text) => updateFormData('commodity', text)}
-          multiline
-        />
+        <View style={styles.dropdownContainer}>
+          <TouchableOpacity 
+            style={styles.dropdown}
+            onPress={() => {
+              const commodityOptions = [
+                'Sand and Gravel',
+                'Filling Materials', 
+                'Construction Aggregates',
+                'Rocks',
+                'Sand',
+                'Boulders',
+                'Base Course',
+                'Common Soil',
+                'Limestone',
+                'Silica',
+                'Others'
+              ];
+              
+              const alertOptions = commodityOptions.map(option => ({
+                text: option,
+                onPress: () => {
+                  updateFormData('commodity', option);
+                  if (option === 'Others') {
+                    updateFormData('commodityOther', '');
+                  }
+                }
+              }));
+              
+              alertOptions.push({ text: 'X', style: 'cancel' });
+              
+              Alert.alert(
+                'Commodity',
+                'Select commodity ⮽',
+                alertOptions
+              );
+            }}
+          >
+            <Text style={styles.dropdownText}>
+              {formData.commodity || 'Select commodity'}
+            </Text>
+            <Ionicons name="chevron-down" size={20} color={COLORS.textSecondary} />
+          </TouchableOpacity>
+        </View>
+        
+        {/* Others input field */}
+        {formData.commodity === 'Others' && (
+          <TextInput 
+            style={[styles.textInput, { marginTop: 8 }]}
+            placeholder="Please specify other commodity"
+            value={formData.commodityOther || ''}
+            onChangeText={(text) => updateFormData('commodityOther', text)}
+          />
+        )}
       </View>
 
       {/* Site Status */}
@@ -3245,11 +3340,11 @@ export default function Reports() {
             onPress={() => {
               Alert.alert(
                 'Site Status',
-                'Select site status',
+                'Select site status ⮽',
                 [
                   { text: t.operating, onPress: () => updateFormData('siteStatus', 'operating') },
                   { text: t.nonOperating, onPress: () => updateFormData('siteStatus', 'non_operating') },
-                  { text: 'Cancel', style: 'cancel' }
+                  { text: 'X', style: 'cancel' }
                 ]
               );
             }}
@@ -3263,8 +3358,6 @@ export default function Reports() {
       {/* Operating Status Activities */}
       {formData.siteStatus === 'operating' && (
         <View style={styles.operatingSection}>
-          <Text style={styles.operatingNote}>{t.operatingNote}</Text>
-          
           <View style={styles.checklistSection}>
             <Text style={styles.sectionLabel}>{t.activitiesObserved}</Text>
             <View style={styles.activitiesContainer}>
@@ -3331,8 +3424,6 @@ export default function Reports() {
       {/* Non-Operating Status Activities */}
       {formData.siteStatus === 'non_operating' && (
         <View style={styles.nonOperatingSection}>
-          <Text style={styles.operatingNote}>{t.nonOperatingNote}</Text>
-          
           <View style={styles.checklistSection}>
             <Text style={styles.sectionLabel}>{t.observations}</Text>
             <View style={styles.activitiesContainer}>
@@ -3476,12 +3567,10 @@ export default function Reports() {
             onPress={handleImageUpload}
             disabled={isUploadingImages}
           >
+            <Ionicons name="images-outline" size={20} color="white" />
             <Text style={styles.uploadText}>
               {isUploadingImages ? 'Uploading...' : t.uploadGallery}
             </Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.cameraButton}>
-            <Text style={styles.cameraText}>{t.useCamera}</Text>
           </TouchableOpacity>
           {uploadedImages.length > 0 && (
             <View style={styles.imagePreviewContainer}>
@@ -3494,7 +3583,21 @@ export default function Reports() {
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.imageScrollView}>
                 {uploadedImages.map((image, index) => (
                   <View key={image.id || `mining_image_${index}_${Date.now()}`} style={styles.imagePreviewItem}>
-                    <Image source={{ uri: image.url }} style={styles.imagePreview} />
+                    <TouchableOpacity
+                      onPress={() => openImagePreview(uploadedImages, index)}
+                      style={styles.imagePreviewTouchable}
+                    >
+                      <Image 
+                        source={{ uri: image.url || image.uri || image.preview }} 
+                        style={styles.imagePreview}
+                        onError={(error) => {
+                          console.log('Mining form image preview error:', error.nativeEvent.error);
+                        }}
+                      />
+                      <View style={styles.imagePreviewOverlayIcon}>
+                        <Ionicons name="eye" size={16} color="white" />
+                      </View>
+                    </TouchableOpacity>
                     <TouchableOpacity
                       style={styles.removeImageButton}
                       onPress={() => handleRemoveImage(index)}
@@ -3578,17 +3681,15 @@ export default function Reports() {
           </View>
         </View>
         <TouchableOpacity 
-          style={[styles.getLocationButton, isLoadingProcessingLocation && styles.buttonDisabled]}
-          onPress={handleProcessingGetCurrentLocation}
-          disabled={isLoadingProcessingLocation}
+          style={[styles.getLocationButton, isLoadingTransportationLocation && styles.buttonDisabled]}
+          onPress={handleTransportationGetCurrentLocation}
+          disabled={isLoadingTransportationLocation}
         >
-          {isLoadingProcessingLocation && (
-            <View style={styles.loadingContainer}>
-              <View style={styles.spinner} />
-            </View>
+          {isLoadingTransportationLocation && (
+            <ActivityIndicator size="small" color="#2196F3" style={styles.buttonSpinner} />
           )}
           <Text style={styles.getLocationText}>
-            {isLoadingProcessingLocation ? 'Getting Location...' : tt.getCoordinates}
+            {isLoadingTransportationLocation ? 'Getting Location...' : tt.getCoordinates}
           </Text>
         </TouchableOpacity>
       </View>
@@ -3664,25 +3765,84 @@ export default function Reports() {
           </TouchableOpacity>
         </View>
         {(transportFormData.violationType === 'outdated' || transportFormData.violationType === 'fraudulent') && (
-          <TextInput 
-            style={styles.textInput}
-            placeholder="Specify document type"
-            value={transportFormData.documentType}
-            onChangeText={(text) => updateTransportFormData('documentType', text)}
-          />
+          <View style={styles.dropdownContainer}>
+            <TouchableOpacity 
+              style={styles.dropdown}
+              onPress={() => {
+                const docTypes = ['OTP', 'DR', 'OTC', 'MOEP'];
+                const alertOptions = docTypes.map(option => ({
+                  text: option,
+                  onPress: () => updateTransportFormData('documentType', option)
+                }));
+                alertOptions.push({ text: 'X', style: 'cancel' });
+                Alert.alert('Document Type', 'Select document type ⮽', alertOptions);
+              }}
+            >
+              <Text style={styles.dropdownText}>
+                {transportFormData.documentType || 'Select document type'}
+              </Text>
+              <Ionicons name="chevron-down" size={20} color={COLORS.textSecondary} />
+            </TouchableOpacity>
+          </View>
         )}
       </View>
 
       {/* Commodity */}
       <View style={styles.checklistSection}>
         <Text style={styles.sectionLabel}>{tt.commodity}</Text>
-        <TextInput 
-          style={styles.textInput}
-          placeholder={tt.commodityPlaceholder}
-          value={transportFormData.commodity}
-          onChangeText={(text) => updateTransportFormData('commodity', text)}
-          multiline
-        />
+        <View style={styles.dropdownContainer}>
+          <TouchableOpacity 
+            style={styles.dropdown}
+            onPress={() => {
+              const commodityOptions = [
+                'Sand and Gravel',
+                'Filling Materials', 
+                'Construction Aggregates',
+                'Rocks',
+                'Sand',
+                'Boulders',
+                'Base Course',
+                'Common Soil',
+                'Limestone',
+                'Silica',
+                'Others'
+              ];
+              
+              const alertOptions = commodityOptions.map(option => ({
+                text: option,
+                onPress: () => {
+                  updateTransportFormData('commodity', option);
+                  if (option === 'Others') {
+                    updateTransportFormData('commodityOther', '');
+                  }
+                }
+              }));
+              
+              alertOptions.push({ text: 'X', style: 'cancel' });
+              
+              Alert.alert(
+                'Commodity',
+                'Select commodity ⮽',
+                alertOptions
+              );
+            }}
+          >
+            <Text style={styles.dropdownText}>
+              {transportFormData.commodity || 'Select commodity'}
+            </Text>
+            <Ionicons name="chevron-down" size={20} color={COLORS.textSecondary} />
+          </TouchableOpacity>
+        </View>
+        
+        {/* Others input field */}
+        {transportFormData.commodity === 'Others' && (
+          <TextInput 
+            style={[styles.textInput, { marginTop: 8 }]}
+            placeholder="Please specify other commodity"
+            value={transportFormData.commodityOther || ''}
+            onChangeText={(text) => updateTransportFormData('commodityOther', text)}
+          />
+        )}
       </View>
 
       {/* Volume/Weight and Unit */}
@@ -3692,7 +3852,7 @@ export default function Reports() {
             <Text style={styles.sectionLabel}>{tt.volumeWeight}</Text>
             <TextInput 
               style={styles.textInput} 
-              placeholder="20"
+              placeholder="Enter volume/weight"
               value={transportFormData.volumeWeight}
               onChangeText={(text) => updateTransportFormData('volumeWeight', text)}
               keyboardType="numeric"
@@ -3700,12 +3860,36 @@ export default function Reports() {
           </View>
           <View style={styles.timeInput}>
             <Text style={styles.sectionLabel}>{tt.unit}</Text>
-            <TextInput 
-              style={styles.textInput} 
-              placeholder={tt.unitPlaceholder}
-              value={transportFormData.unit}
-              onChangeText={(text) => updateTransportFormData('unit', text)}
-            />
+            <TouchableOpacity 
+              style={styles.dropdown}
+              onPress={() => {
+                const unitOptions = ['Cubic Meters', 'Metric Tons', 'Sacks', 'Others'];
+                const alertOptions = unitOptions.map(option => ({
+                  text: option,
+                  onPress: () => {
+                    updateTransportFormData('unit', option);
+                    if (option !== 'Others') {
+                      updateTransportFormData('unitOther', '');
+                    }
+                  }
+                }));
+                alertOptions.push({ text: 'X', style: 'cancel' });
+                Alert.alert('Unit', 'Select unit ⮽', alertOptions);
+              }}
+            >
+              <Text style={styles.dropdownText}>
+                {transportFormData.unit || 'Select unit'}
+              </Text>
+              <Ionicons name="chevron-down" size={20} color={COLORS.textSecondary} />
+            </TouchableOpacity>
+            {transportFormData.unit === 'Others' && (
+              <TextInput 
+                style={[styles.textInput, { marginTop: 8 }]}
+                placeholder="Please specify unit"
+                value={transportFormData.unitOther || ''}
+                onChangeText={(text) => updateTransportFormData('unitOther', text)}
+              />
+            )}
           </View>
         </View>
       </View>
@@ -3713,12 +3897,36 @@ export default function Reports() {
       {/* Type of Vehicle */}
       <View style={styles.checklistSection}>
         <Text style={styles.sectionLabel}>{tt.vehicleType}</Text>
-        <TextInput 
-          style={styles.textInput}
-          placeholder={tt.vehicleTypePlaceholder}
-          value={transportFormData.vehicleType}
-          onChangeText={(text) => updateTransportFormData('vehicleType', text)}
-        />
+        <TouchableOpacity 
+          style={styles.dropdown}
+          onPress={() => {
+            const vehicleOptions = ['Dump Truck', 'Mini Dump Truck', 'Jeepney', 'Tricycle', 'Others'];
+            const alertOptions = vehicleOptions.map(option => ({
+              text: option,
+              onPress: () => {
+                updateTransportFormData('vehicleType', option);
+                if (option !== 'Others') {
+                  updateTransportFormData('vehicleTypeOther', '');
+                }
+              }
+            }));
+            alertOptions.push({ text: 'X', style: 'cancel' });
+            Alert.alert('Vehicle Type', 'Select vehicle type ⮽', alertOptions);
+          }}
+        >
+          <Text style={styles.dropdownText}>
+            {transportFormData.vehicleType || 'Select vehicle type'}
+          </Text>
+          <Ionicons name="chevron-down" size={20} color={COLORS.textSecondary} />
+        </TouchableOpacity>
+        {transportFormData.vehicleType === 'Others' && (
+          <TextInput 
+            style={[styles.textInput, { marginTop: 8 }]}
+            placeholder="Please specify vehicle type"
+            value={transportFormData.vehicleTypeOther || ''}
+            onChangeText={(text) => updateTransportFormData('vehicleTypeOther', text)}
+          />
+        )}
       </View>
 
       {/* Vehicle Description */}
@@ -3820,12 +4028,10 @@ export default function Reports() {
             onPress={handleImageUpload}
             disabled={isUploadingImages}
           >
+            <Ionicons name="images-outline" size={20} color="white" />
             <Text style={styles.uploadText}>
               {isUploadingImages ? 'Uploading...' : tt.uploadGallery}
             </Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.cameraButton}>
-            <Text style={styles.cameraText}>{tt.useCamera}</Text>
           </TouchableOpacity>
           {uploadedImages.length > 0 && (
             <View style={styles.imagePreviewContainer}>
@@ -3934,17 +4140,15 @@ export default function Reports() {
           </View>
         </View>
         <TouchableOpacity 
-          style={[styles.getLocationButton, isLoadingTradingLocation && styles.buttonDisabled]}
-          onPress={handleTradingGetCurrentLocation}
-          disabled={isLoadingTradingLocation}
+          style={[styles.getLocationButton, isLoadingProcessingLocation && styles.buttonDisabled]}
+          onPress={handleProcessingGetCurrentLocation}
+          disabled={isLoadingProcessingLocation}
         >
-          {isLoadingTradingLocation && (
-            <View style={styles.loadingContainer}>
-              <View style={styles.spinner} />
-            </View>
+          {isLoadingProcessingLocation && (
+            <ActivityIndicator size="small" color="#2196F3" style={styles.buttonSpinner} />
           )}
           <Text style={styles.getLocationText}>
-            {isLoadingTradingLocation ? 'Getting Location...' : tp.getCoordinates}
+            {isLoadingProcessingLocation ? 'Getting Location...' : tp.getCoordinates}
           </Text>
         </TouchableOpacity>
       </View>
@@ -4154,12 +4358,10 @@ export default function Reports() {
             onPress={handleImageUpload}
             disabled={isUploadingImages}
           >
+            <Ionicons name="images-outline" size={20} color="white" />
             <Text style={styles.uploadText}>
               {isUploadingImages ? 'Uploading...' : tp.uploadGallery}
             </Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.cameraButton}>
-            <Text style={styles.cameraText}>{tp.useCamera}</Text>
           </TouchableOpacity>
           {uploadedImages.length > 0 && (
             <View style={styles.imagePreviewContainer}>
@@ -4268,17 +4470,15 @@ export default function Reports() {
           </View>
         </View>
         <TouchableOpacity 
-          style={[styles.getLocationButton, isLoadingLocation && styles.buttonDisabled]}
-          onPress={handleGetCurrentLocation}
-          disabled={isLoadingLocation}
+          style={[styles.getLocationButton, isLoadingTradingLocation && styles.buttonDisabled]}
+          onPress={handleTradingGetCurrentLocation}
+          disabled={isLoadingTradingLocation}
         >
-          {isLoadingLocation && (
-            <View style={styles.loadingContainer}>
-              <View style={styles.spinner} />
-            </View>
+          {isLoadingTradingLocation && (
+            <ActivityIndicator size="small" color="#2196F3" style={styles.buttonSpinner} />
           )}
           <Text style={styles.getLocationText}>
-            {isLoadingLocation ? 'Getting Location...' : td.getCoordinates}
+            {isLoadingTradingLocation ? 'Getting Location...' : td.getCoordinates}
           </Text>
         </TouchableOpacity>
       </View>
@@ -4324,14 +4524,10 @@ export default function Reports() {
       {/* Type of Violation */}
       <View style={styles.checklistSection}>
         <Text style={styles.sectionLabel}>{td.violationType}</Text>
-        <View style={styles.checkboxContainer}>
-          <TouchableOpacity 
-            style={styles.checkboxRow}
-            onPress={() => updateTradingFormData('violationType', !tradingFormData.violationType)}
-          >
-            <View style={[styles.checkbox, tradingFormData.violationType && styles.checkedBox]} />
-            <Text style={styles.checkboxText}>{td.tradingViolation}</Text>
-          </TouchableOpacity>
+        <View style={[styles.checkboxContainer, { backgroundColor: '#F0F8FF', padding: 12, borderRadius: 8 }]}>
+          <Text style={[styles.checkboxText, { fontWeight: '600', color: COLORS.textPrimary }]}>
+            {td.tradingViolation}
+          </Text>
         </View>
       </View>
 
@@ -4368,13 +4564,52 @@ export default function Reports() {
       {/* Commodity */}
       <View style={styles.checklistSection}>
         <Text style={styles.sectionLabel}>{td.commodity}</Text>
-        <TextInput 
-          style={styles.textInput}
-          placeholder={td.commodityPlaceholder}
-          value={tradingFormData.commodity}
-          onChangeText={(text) => updateTradingFormData('commodity', text)}
-          multiline
-        />
+        <View style={styles.dropdownContainer}>
+          <TouchableOpacity 
+            style={styles.dropdown}
+            onPress={() => {
+              const commodityOptions = [
+                'Sand',
+                'Gravel', 
+                'Limestone',
+                'Others'
+              ];
+              
+              const alertOptions = commodityOptions.map(option => ({
+                text: option,
+                onPress: () => {
+                  updateTradingFormData('commodity', option);
+                  if (option === 'Others') {
+                    updateTradingFormData('commodityOther', '');
+                  }
+                }
+              }));
+              
+              alertOptions.push({ text: 'X', style: 'cancel' });
+              
+              Alert.alert(
+                'Commodity',
+                'Select commodity ⮽',
+                alertOptions
+              );
+            }}
+          >
+            <Text style={styles.dropdownText}>
+              {tradingFormData.commodity || 'Select commodity'}
+            </Text>
+            <Ionicons name="chevron-down" size={20} color={COLORS.textSecondary} />
+          </TouchableOpacity>
+        </View>
+        
+        {/* Others input field */}
+        {tradingFormData.commodity === 'Others' && (
+          <TextInput 
+            style={[styles.textInput, { marginTop: 8 }]}
+            placeholder="Please specify other commodity"
+            value={tradingFormData.commodityOther || ''}
+            onChangeText={(text) => updateTradingFormData('commodityOther', text)}
+          />
+        )}
       </View>
 
       {/* Name of the source of commodity */}
@@ -4417,13 +4652,12 @@ export default function Reports() {
             onPress={() => {
               Alert.alert(
                 'Stockpiled Materials',
-                'Select option',
+                'Select option ⮽',
                 [
                   { text: td.yes, onPress: () => updateTradingFormData('stockpiledMaterials', 'yes') },
                   { text: td.no, onPress: () => updateTradingFormData('stockpiledMaterials', 'no') },
-                  { text: td.none, onPress: () => updateTradingFormData('stockpiledMaterials', 'none') },
                   { text: td.notDetermined, onPress: () => updateTradingFormData('stockpiledMaterials', 'not_determined') },
-                  { text: 'Cancel', style: 'cancel' }
+                  { text: 'X', style: 'cancel' }
                 ]
               );
             }}
@@ -4431,7 +4665,6 @@ export default function Reports() {
             <Text style={styles.dropdownText}>
               {tradingFormData.stockpiledMaterials === 'yes' ? td.yes :
                tradingFormData.stockpiledMaterials === 'no' ? td.no :
-               tradingFormData.stockpiledMaterials === 'none' ? td.none :
                tradingFormData.stockpiledMaterials === 'not_determined' ? td.notDetermined : 'Select option'}
             </Text>
             <Ionicons name="chevron-down" size={20} color={COLORS.textSecondary} />
@@ -4484,12 +4717,10 @@ export default function Reports() {
             onPress={handleImageUpload}
             disabled={isUploadingImages}
           >
+            <Ionicons name="images-outline" size={20} color="white" />
             <Text style={styles.uploadText}>
               {isUploadingImages ? 'Uploading...' : td.uploadGallery}
             </Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.cameraButton}>
-            <Text style={styles.cameraText}>{td.useCamera}</Text>
           </TouchableOpacity>
             {uploadedImages.length > 0 && (
               <View style={styles.imagePreviewContainer}>
@@ -4603,9 +4834,7 @@ export default function Reports() {
           disabled={isLoadingExplorationLocation}
         >
           {isLoadingExplorationLocation && (
-            <View style={styles.loadingContainer}>
-              <View style={styles.spinner} />
-            </View>
+            <ActivityIndicator size="small" color="#2196F3" style={styles.buttonSpinner} />
           )}
           <Text style={styles.getLocationText}>
             {isLoadingExplorationLocation ? 'Getting Location...' : te.getCoordinates}
@@ -4789,12 +5018,10 @@ export default function Reports() {
             onPress={handleImageUpload}
             disabled={isUploadingImages}
           >
+            <Ionicons name="images-outline" size={20} color="white" />
             <Text style={styles.uploadText}>
               {isUploadingImages ? 'Uploading...' : te.uploadGallery}
             </Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.cameraButton}>
-            <Text style={styles.cameraText}>{te.useCamera}</Text>
           </TouchableOpacity>
           {uploadedImages.length > 0 && (
             <View style={styles.imagePreviewContainer}>
@@ -4908,9 +5135,7 @@ export default function Reports() {
           disabled={isLoadingSmallScaleMiningLocation}
         >
           {isLoadingSmallScaleMiningLocation && (
-            <View style={styles.loadingContainer}>
-              <View style={styles.spinner} />
-            </View>
+            <ActivityIndicator size="small" color="#2196F3" style={styles.buttonSpinner} />
           )}
           <Text style={styles.getLocationText}>
             {isLoadingSmallScaleMiningLocation ? 'Getting Location...' : ts.getCoordinates}
@@ -4994,12 +5219,53 @@ export default function Reports() {
       {/* Commodity */}
       <View style={styles.checklistSection}>
         <Text style={styles.sectionLabel}>{ts.commodity}</Text>
-        <TextInput 
-          style={styles.textInput}
-          placeholder={ts.commodityPlaceholder}
-          value={smallScaleMiningFormData.commodity}
-          onChangeText={(text) => updateSmallScaleMiningFormData('commodity', text)}
-        />
+        <View style={styles.dropdownContainer}>
+          <TouchableOpacity 
+            style={styles.dropdown}
+            onPress={() => {
+              const commodityOptions = [
+                'Sand and Gravel',
+                'Filling Materials', 
+                'Aggregates',
+                'Rocks',
+                'Others'
+              ];
+              
+              const alertOptions = commodityOptions.map(option => ({
+                text: option,
+                onPress: () => {
+                  updateSmallScaleMiningFormData('commodity', option);
+                  if (option === 'Others') {
+                    updateSmallScaleMiningFormData('commodityOther', '');
+                  }
+                }
+              }));
+              
+              alertOptions.push({ text: 'X', style: 'cancel' });
+              
+              Alert.alert(
+                'Commodity',
+                'Select commodity ⮽',
+                alertOptions
+              );
+            }}
+          >
+            <Text style={styles.dropdownText}>
+              {smallScaleMiningFormData.commodity || 'Select commodity'}
+            </Text>
+            <Ionicons name="chevron-down" size={20} color={COLORS.textSecondary} />
+          </TouchableOpacity>
+        </View>
+        
+        {/* Others input field */}
+        {smallScaleMiningFormData.commodity === 'Others' && (
+          <TextInput 
+            style={[styles.textInput, { marginTop: 8 }]}
+            placeholder="Please specify other commodity"
+            value={smallScaleMiningFormData.commodityOther || ''}
+            onChangeText={(text) => updateSmallScaleMiningFormData('commodityOther', text)}
+          />
+        )}
       </View>
 
       {/* Site Status */}
@@ -5335,12 +5601,10 @@ export default function Reports() {
             onPress={handleImageUpload}
             disabled={isUploadingImages}
           >
+            <Ionicons name="images-outline" size={20} color="white" />
             <Text style={styles.uploadText}>
               {isUploadingImages ? 'Uploading...' : ts.uploadGallery}
             </Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.cameraButton}>
-            <Text style={styles.cameraText}>{ts.useCamera}</Text>
           </TouchableOpacity>
           {uploadedImages.length > 0 && (
             <View style={styles.imagePreviewContainer}>
@@ -5432,9 +5696,7 @@ export default function Reports() {
             <Text style={styles.modalTitle}>
               {selectedCategory && (language === 'english' ? selectedCategory.english : selectedCategory.filipino)} Checklist
             </Text>
-            <TouchableOpacity onPress={() => Alert.alert('Profile', 'User profile options')}>
-              <Ionicons name="person-circle-outline" size={24} color={COLORS.textPrimary} />
-            </TouchableOpacity>
+            <View style={{ width: 24 }} />
           </View>
           
           {selectedCategory?.id === 'illegal_mining' ? IllegalMiningChecklist : 
@@ -6199,7 +6461,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   getLocationText: {
-    fontSize: 12,
+    fontSize: 14,
     color: '#2196F3',
     fontWeight: '600',
   },
@@ -6225,21 +6487,32 @@ const styles = StyleSheet.create({
     backgroundColor: '#E3F2FD',
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: COLORS.background,
     padding: 8,
     borderRadius: 4,
     gap: 8,
   },
   checkbox: {
-    width: 16,
-    height: 16,
-    borderWidth: 1,
+    width: 20,
+    height: 20,
+    borderWidth: 2,
     borderColor: COLORS.border,
-    borderRadius: 2,
+    borderRadius: 4,
+    marginRight: 12,
   },
   checkedBox: {
     backgroundColor: COLORS.primary,
     borderColor: COLORS.primary,
+  },
+  checkboxContainer: {
+    gap: 12,
+  },
+  checkboxRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 4,
   },
   dropdownContainer: {
     marginTop: 8,
@@ -6302,8 +6575,9 @@ const styles = StyleSheet.create({
   },
   checkboxText: {
     flex: 1,
-    fontSize: 12,
+    fontSize: 14,
     color: COLORS.textPrimary,
+    lineHeight: 20,
   },
   observationRow: {
     flexDirection: 'row',
@@ -6368,13 +6642,26 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   uploadButton: {
-    backgroundColor: '#E3F2FD',
-    padding: 12,
-    borderRadius: 4,
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.primary,
+    padding: 14,
+    borderRadius: 8,
+    gap: 8,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
   },
   uploadText: {
-    fontSize: 12,
+    fontSize: 14,
+    color: 'white',
+    fontWeight: '600',
+  },
+  usePhoneText: {
+    fontSize: 14,
     color: '#2196F3',
     fontWeight: '600',
   },
@@ -6510,20 +6797,8 @@ const styles = StyleSheet.create({
     zIndex: 5,
   },
   // Loading Animation Styles
-  loadingContainer: {
-    position: 'absolute',
-    left: 8,
-    top: '50%',
-    transform: [{ translateY: -6 }],
-  },
-  spinner: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    borderWidth: 2,
-    borderColor: '#2196F3',
-    borderTopColor: 'transparent',
-    animation: 'spin 1s linear infinite',
+  buttonSpinner: {
+    marginRight: 8,
   },
   certificationText: {
     fontSize: 11,
@@ -6600,6 +6875,16 @@ const styles = StyleSheet.create({
       minHeight: 45,
     },
     backgroundColor: COLORS.inputBackground,
+  },
+  textInput: {
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 14,
+    color: COLORS.textPrimary,
+    backgroundColor: COLORS.white,
+    minHeight: 45,
   },
   textArea: {
     height: 100,
@@ -6899,5 +7184,58 @@ const styles = StyleSheet.create({
   thumbnailStripImage: {
     width: '100%',
     height: '100%',
+  },
+  // Two-column layout for activities
+  twoColumnContainer: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 8,
+  },
+  column: {
+    flex: 1,
+  },
+  // Inline checkboxes
+  inlineCheckboxRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+    paddingVertical: 8,
+  },
+  inlineCheckboxes: {
+    flexDirection: 'row',
+    gap: 20,
+  },
+  inlineCheckboxItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  checkboxLabel: {
+    fontSize: 14,
+    color: COLORS.textPrimary,
+    fontWeight: '500',
+  },
+  // Compact activity row
+  compactActivityRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.white,
+    padding: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    gap: 8,
+    marginBottom: 8,
+  },
+  compactActivityText: {
+    fontSize: 14,
+    color: COLORS.textPrimary,
+    flex: 1,
+  },
+  // Justified text
+  justifiedText: {
+    textAlign: 'justify',
+    lineHeight: 20,
   },
 });

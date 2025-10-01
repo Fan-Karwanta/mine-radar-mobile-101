@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -13,8 +13,13 @@ import { Ionicons } from "@expo/vector-icons";
 import COLORS from "../../constants/colors";
 
 export default function Profile() {
-  const { user, logout } = useAuthStore();
+  const { user, logout, checkAuth } = useAuthStore();
   const router = useRouter();
+
+  // Refresh user data on focus
+  useEffect(() => {
+    checkAuth();
+  }, []);
 
   const handleLogout = () => {
     Alert.alert(
@@ -32,6 +37,12 @@ export default function Profile() {
         },
       ]
     );
+  };
+
+  // Format user's full name
+  const getFormattedName = () => {
+    if (!user?.completeName) return user?.username || 'User';
+    return user.completeName;
   };
 
   const ProfileCard = ({ icon, title, subtitle, onPress, showChevron = true }) => (
@@ -75,11 +86,11 @@ export default function Profile() {
           </View>
         </View>
         <View style={styles.userInfo}>
-          <Text style={styles.userName}>{user?.username || 'User'}</Text>
+          <Text style={styles.userName}>{getFormattedName()}</Text>
           <Text style={styles.userEmail}>{user?.email || 'user@example.com'}</Text>
           <View style={styles.userRole}>
             <Ionicons name="shield-checkmark" size={16} color={COLORS.primary} />
-            <Text style={styles.roleText}>Mining Inspector</Text>
+            <Text style={styles.roleText}>{user?.role || 'Public User'}</Text>
           </View>
         </View>
       </View>
@@ -178,9 +189,9 @@ export default function Profile() {
           />
           <ProfileCard
             icon="information-circle-outline"
-            title="About MineRadar"
+            title="About Mine Radar"
             subtitle="Version 1.0.0"
-            onPress={() => Alert.alert('About', 'MineRadar v1.0.0\nMining Directory and Reporting App\nDeveloped for MGB CALABARZON')}
+            onPress={() => Alert.alert('About', 'Mine Radar v1.0.0\nMining Directory and Reporting App\nDeveloped for MGB CALABARZON')}
           />
         </View>
       </View>
@@ -239,9 +250,9 @@ const styles = StyleSheet.create({
     marginRight: 16,
   },
   avatar: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+    width: 70,
+    height: 70,
+    borderRadius: 35,
     backgroundColor: COLORS.primary,
     justifyContent: 'center',
     alignItems: 'center',

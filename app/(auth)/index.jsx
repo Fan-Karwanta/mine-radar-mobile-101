@@ -42,6 +42,13 @@ export default function Login() {
       behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
       <View style={styles.container}>
+        {/* BACKGROUND IMAGE */}
+        <Image
+          source={require("../../assets/images/mgb-logo.png")}
+          style={styles.backgroundImage}
+          resizeMode="contain"
+        />
+        
         {/* ILLUSTRATION */}
         <View style={styles.topIllustration}>
           <Image

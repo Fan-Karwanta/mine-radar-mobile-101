@@ -267,12 +267,34 @@ class AsyncStorageOfflineService {
       }
 
       if (params.status && params.status !== 'all') {
+        console.log('Filtering by status:', params.status, 'in category:', category);
+        
+        // Debug: Check if records have status values
+        const sampleRecords = allRecords.slice(0, 3);
+        console.log('Sample records before filtering:', sampleRecords.map(r => ({ 
+          id: r._id, 
+          status: category === 'hotspots' ? r.actionsTaken : r.status 
+        })));
+        
         allRecords = allRecords.filter(record => {
+          let recordStatus;
+          
           if (category === 'hotspots') {
-            return record.actionsTaken === params.status;
+            recordStatus = record.actionsTaken;
+          } else {
+            recordStatus = record.status;
           }
-          return record.status === params.status;
+          
+          // Handle null/undefined/empty status
+          if (!recordStatus) {
+            return params.status === 'Unknown';
+          }
+          
+          // Case-insensitive comparison for better matching
+          return recordStatus.toLowerCase() === params.status.toLowerCase();
         });
+        
+        console.log('Records count after filtering:', allRecords.length);
       }
 
       if (params.classification && params.classification !== 'all') {
@@ -427,6 +449,42 @@ class AsyncStorageOfflineService {
 
     } catch (error) {
       console.error('Error clearing offline data:', error);
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  }
+
+  // Hard refresh: Clear offline data and re-download fresh data
+  async hardRefreshOfflineData(progressCallback) {
+    try {
+      console.log('🔄 Starting hard refresh of offline data...');
+      
+      // Step 1: Clear existing offline data
+      const clearResult = await this.clearOfflineData();
+      if (!clearResult.success) {
+        throw new Error('Failed to clear offline data: ' + clearResult.error);
+      }
+
+      // Step 2: Re-download all data
+      const downloadResult = await this.downloadAllDirectoryData(progressCallback);
+      
+      if (downloadResult.success) {
+        console.log('✅ Hard refresh completed successfully');
+        return {
+          success: true,
+          message: 'Offline data refreshed successfully',
+          downloadDetails: downloadResult.downloadDetails,
+          duplicateDetails: downloadResult.duplicateDetails,
+          stats: downloadResult.stats
+        };
+      } else {
+        throw new Error('Failed to re-download data: ' + downloadResult.error);
+      }
+
+    } catch (error) {
+      console.error('❌ Hard refresh failed:', error);
       return {
         success: false,
         error: error.message

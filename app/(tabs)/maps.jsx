@@ -21,6 +21,7 @@ function Maps() {
   const mapRef = useRef(null);
   const [locationPermission, setLocationPermission] = useState(null);
   const [isLoadingLocation, setIsLoadingLocation] = useState(false);
+  const [showNotesModal, setShowNotesModal] = useState(false);
 
   const requestLocationPermission = async () => {
     try {
@@ -141,7 +142,15 @@ function Maps() {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Mining Sites Map</Text>
+        <View style={styles.headerTitleContainer}>
+          <Text style={styles.headerTitle}>Location Map</Text>
+          <TouchableOpacity 
+            style={styles.infoButton}
+            onPress={() => setShowNotesModal(true)}
+          >
+            <Ionicons name="information-circle-outline" size={24} color={COLORS.primary} />
+          </TouchableOpacity>
+        </View>
       </View>
 
 
@@ -193,7 +202,38 @@ function Maps() {
         </View>
       </View>
 
-
+      {/* Notes Modal */}
+      <Modal
+        visible={showNotesModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowNotesModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.notesModalContent}>
+            <View style={styles.notesModalHeader}>
+              <Text style={styles.notesModalTitle}>Notes</Text>
+              <TouchableOpacity onPress={() => setShowNotesModal(false)}>
+                <Ionicons name="close" size={24} color={COLORS.textPrimary} />
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={styles.notesContent}>
+              <View style={styles.noteItem}>
+                <Text style={styles.noteLabel}>a.</Text>
+                <Text style={styles.noteText}>
+                  Plotting of Mining Rights and Mining Applications were based on the technical description of the applied area per survey plan/topographic map/sketch plan.
+                </Text>
+              </View>
+              <View style={styles.noteItem}>
+                <Text style={styles.noteLabel}>b.</Text>
+                <Text style={styles.noteText}>
+                  Locations of Hotspots were based on geotagged photos taken during the conduct of investigations.
+                </Text>
+              </View>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
 
     </View>
   );
@@ -212,11 +252,18 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
   },
+  headerTitleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
   headerTitle: {
     fontSize: 24,
     fontWeight: 'bold',
     color: COLORS.textPrimary,
-    marginBottom: 4,
+  },
+  infoButton: {
+    padding: 4,
   },
   headerSubtitle: {
     fontSize: 14,
@@ -514,6 +561,50 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: COLORS.white,
     fontWeight: '600',
+  },
+  notesModalContent: {
+    backgroundColor: COLORS.white,
+    borderRadius: 16,
+    width: '90%',
+    maxHeight: '70%',
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+  },
+  notesModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  notesModalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: COLORS.textPrimary,
+  },
+  notesContent: {
+    padding: 20,
+  },
+  noteItem: {
+    flexDirection: 'row',
+    marginBottom: 16,
+    gap: 8,
+  },
+  noteLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.textPrimary,
+    marginTop: 2,
+  },
+  noteText: {
+    flex: 1,
+    fontSize: 14,
+    color: COLORS.textSecondary,
+    lineHeight: 22,
   },
 });
 

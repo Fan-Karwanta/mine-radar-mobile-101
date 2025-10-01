@@ -10,7 +10,7 @@ export const useAuthStore = create((set) => ({
   isLoading: false,
   isCheckingAuth: true,
 
-  register: async (username, email, password) => {
+  register: async (username, email, password, completeName, agency, position, contactNumber) => {
     set({ isLoading: true });
     try {
       // Check network connectivity
@@ -28,6 +28,10 @@ export const useAuthStore = create((set) => ({
           username,
           email,
           password,
+          completeName,
+          agency,
+          position,
+          contactNumber,
         }),
       });
 
@@ -113,7 +117,15 @@ export const useAuthStore = create((set) => ({
           user = {
             id: authData.id,
             username: authData.username,
-            email: authData.email
+            email: authData.email,
+            completeName: authData.completeName,
+            agency: authData.agency,
+            position: authData.position,
+            contactNumber: authData.contactNumber,
+            role: authData.role,
+            status: authData.status,
+            profileImage: authData.profileImage,
+            createdAt: authData.createdAt
           };
           
           // Sync back to AsyncStorage
@@ -139,5 +151,39 @@ export const useAuthStore = create((set) => ({
     await asyncStorageOfflineService.clearAuthData();
     
     set({ token: null, user: null });
+  },
+
+  updateUser: async (userData) => {
+    try {
+      const token = await AsyncStorage.getItem("token");
+      
+      const response = await fetch(`${API_URL}/auth/update-profile`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`,
+        },
+        body: JSON.stringify(userData),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) throw new Error(data.message || "Failed to update profile");
+
+      // Update local storage
+      await AsyncStorage.setItem("user", JSON.stringify(data.user));
+      
+      // Update AsyncStorage service
+      await asyncStorageOfflineService.saveAuthData({
+        ...data.user,
+        token
+      });
+
+      set({ user: data.user });
+
+      return { success: true, user: data.user };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
   },
 }));
