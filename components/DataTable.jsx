@@ -16,8 +16,8 @@ const DataTable = ({ data, onRowPress, category }) => {
     switch (category) {
       case 'national':
         return [
-          { key: 'permitNumber', label: 'Contract No.', width: 130 },
-          { key: 'permitHolder', label: 'Contractor', width: 180 },
+          { key: 'permitNumber', label: 'No.', width: 130 },
+          { key: 'permitHolder', label: 'Holder', width: 180 },
           { key: 'classification', label: 'Classification', width: 120 },
           { key: 'type', label: 'Type', width: 120 },
           { key: 'commodity', label: 'Commodity', width: 140 },
@@ -28,8 +28,8 @@ const DataTable = ({ data, onRowPress, category }) => {
         ];
       case 'local':
         return [
-          { key: 'permitNumber', label: 'Permit No.', width: 130 },
-          { key: 'permitHolder', label: 'Permit Holder', width: 180 },
+          { key: 'permitNumber', label: 'No.', width: 130 },
+          { key: 'permitHolder', label: 'Holder', width: 180 },
           { key: 'classification', label: 'Classification', width: 120 },
           { key: 'type', label: 'Type', width: 120 },
           { key: 'commodity', label: 'Commodities', width: 140 },

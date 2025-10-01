@@ -674,6 +674,10 @@ export default function Reports() {
   
   // Filter and search state
   const [searchQuery, setSearchQuery] = useState('');
+  
+  // Commodity picker modal state
+  const [showCommodityPicker, setShowCommodityPicker] = useState(false);
+  const [commodityPickerCallback, setCommodityPickerCallback] = useState(null);
   const [filterStatus, setFilterStatus] = useState('all');
   const [filterType, setFilterType] = useState('all');
   
@@ -4216,6 +4220,73 @@ export default function Reports() {
     );
   };
 
+  // Commodity Picker Modal Component
+  const CommodityPickerModal = () => {
+    const commodityOptions = [
+      'Sand and Gravel',
+      'Filling Materials',
+      'Construction Aggregates',
+      'Rocks',
+      'Sand',
+      'Boulders',
+      'Base Course',
+      'Common Soil',
+      'Limestone',
+      'Silica',
+      'Others'
+    ];
+
+    return (
+      <Modal 
+        visible={showCommodityPicker} 
+        transparent 
+        animationType="slide"
+        onRequestClose={() => setShowCommodityPicker(false)}
+      >
+        <TouchableOpacity 
+          style={styles.commodityModalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowCommodityPicker(false)}
+        >
+          <TouchableOpacity 
+            activeOpacity={1}
+            style={styles.commodityPickerContent}
+            onPress={(e) => e.stopPropagation()}
+          >
+            <View style={styles.commodityPickerHeader}>
+              <View style={styles.modalHandleBar} />
+              <Text style={styles.commodityPickerTitle}>Select Commodity</Text>
+            </View>
+            
+            <ScrollView 
+              style={styles.commodityList}
+              showsVerticalScrollIndicator={false}
+            >
+              {commodityOptions.map((option, index) => (
+                <TouchableOpacity
+                  key={index}
+                  style={[
+                    styles.commodityOption,
+                    index === commodityOptions.length - 1 && styles.commodityOptionLast
+                  ]}
+                  onPress={() => {
+                    if (commodityPickerCallback) {
+                      commodityPickerCallback(option);
+                    }
+                    setShowCommodityPicker(false);
+                  }}
+                >
+                  <Text style={styles.commodityOptionText}>{option}</Text>
+                  <Ionicons name="checkmark-circle" size={24} color={COLORS.primary} style={{ opacity: 0 }} />
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+    );
+  };
+
   const CategorySelectionModal = () => (
     <Modal visible={showCategoryModal} transparent animationType="slide">
       <View style={styles.modalOverlay}>
@@ -4394,37 +4465,13 @@ export default function Reports() {
           <TouchableOpacity 
             style={styles.dropdown}
             onPress={() => {
-              const commodityOptions = [
-                'Sand and Gravel',
-                'Filling Materials', 
-                'Construction Aggregates',
-                'Rocks',
-                'Sand',
-                'Boulders',
-                'Base Course',
-                'Common Soil',
-                'Limestone',
-                'Silica',
-                'Others'
-              ];
-              
-              const alertOptions = commodityOptions.map(option => ({
-                text: option,
-                onPress: () => {
-                  updateFormData('commodity', option);
-                  if (option === 'Others') {
-                    updateFormData('commodityOther', '');
-                  }
+              setCommodityPickerCallback(() => (option) => {
+                updateFormData('commodity', option);
+                if (option === 'Others') {
+                  updateFormData('commodityOther', '');
                 }
-              }));
-              
-              alertOptions.push({ text: 'X', style: 'cancel' });
-              
-              Alert.alert(
-                'Commodity',
-                'Select commodity ⮽',
-                alertOptions
-              );
+              });
+              setShowCommodityPicker(true);
             }}
           >
             <Text style={styles.dropdownText}>
@@ -4908,37 +4955,13 @@ export default function Reports() {
           <TouchableOpacity 
             style={styles.dropdown}
             onPress={() => {
-              const commodityOptions = [
-                'Sand and Gravel',
-                'Filling Materials', 
-                'Construction Aggregates',
-                'Rocks',
-                'Sand',
-                'Boulders',
-                'Base Course',
-                'Common Soil',
-                'Limestone',
-                'Silica',
-                'Others'
-              ];
-              
-              const alertOptions = commodityOptions.map(option => ({
-                text: option,
-                onPress: () => {
-                  updateTransportFormData('commodity', option);
-                  if (option === 'Others') {
-                    updateTransportFormData('commodityOther', '');
-                  }
+              setCommodityPickerCallback(() => (option) => {
+                updateTransportFormData('commodity', option);
+                if (option === 'Others') {
+                  updateTransportFormData('commodityOther', '');
                 }
-              }));
-              
-              alertOptions.push({ text: 'X', style: 'cancel' });
-              
-              Alert.alert(
-                'Commodity',
-                'Select commodity ⮽',
-                alertOptions
-              );
+              });
+              setShowCommodityPicker(true);
             }}
           >
             <Text style={styles.dropdownText}>
@@ -5682,37 +5705,13 @@ export default function Reports() {
           <TouchableOpacity 
             style={styles.dropdown}
             onPress={() => {
-              const commodityOptions = [
-                'Sand and Gravel',
-                'Filling Materials', 
-                'Construction Aggregates',
-                'Rocks',
-                'Sand',
-                'Boulders',
-                'Base Course',
-                'Common Soil',
-                'Limestone',
-                'Silica',
-                'Others'
-              ];
-              
-              const alertOptions = commodityOptions.map(option => ({
-                text: option,
-                onPress: () => {
-                  updateTradingFormData('commodity', option);
-                  if (option === 'Others') {
-                    updateTradingFormData('commodityOther', '');
-                  }
+              setCommodityPickerCallback(() => (option) => {
+                updateTradingFormData('commodity', option);
+                if (option === 'Others') {
+                  updateTradingFormData('commodityOther', '');
                 }
-              }));
-              
-              alertOptions.push({ text: 'X', style: 'cancel' });
-              
-              Alert.alert(
-                'Commodity',
-                'Select commodity ⮽',
-                alertOptions
-              );
+              });
+              setShowCommodityPicker(true);
             }}
           >
             <Text style={styles.dropdownText}>
@@ -6344,37 +6343,13 @@ export default function Reports() {
           <TouchableOpacity 
             style={styles.dropdown}
             onPress={() => {
-              const commodityOptions = [
-                'Sand and Gravel',
-                'Filling Materials', 
-                'Construction Aggregates',
-                'Rocks',
-                'Sand',
-                'Boulders',
-                'Base Course',
-                'Common Soil',
-                'Limestone',
-                'Silica',
-                'Others'
-              ];
-              
-              const alertOptions = commodityOptions.map(option => ({
-                text: option,
-                onPress: () => {
-                  updateSmallScaleMiningFormData('commodity', option);
-                  if (option === 'Others') {
-                    updateSmallScaleMiningFormData('commodityOther', '');
-                  }
+              setCommodityPickerCallback(() => (option) => {
+                updateSmallScaleMiningFormData('commodity', option);
+                if (option === 'Others') {
+                  updateSmallScaleMiningFormData('commodityOther', '');
                 }
-              }));
-              
-              alertOptions.push({ text: 'X', style: 'cancel' });
-              
-              Alert.alert(
-                'Commodity',
-                'Select commodity ⮽',
-                alertOptions
-              );
+              });
+              setShowCommodityPicker(true);
             }}
           >
             <Text style={styles.dropdownText}>
@@ -7113,6 +7088,7 @@ export default function Reports() {
       <ReportDetailModal />
       <DraftDetailModal />
       <ImagePreviewModal />
+      <CommodityPickerModal />
     </View>
   );
 }
@@ -7468,6 +7444,61 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     width: '90%',
     height: '70%',
+  },
+  // Commodity Picker Modal Styles
+  commodityModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  commodityPickerContent: {
+    backgroundColor: COLORS.white,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    maxHeight: '70%',
+    paddingBottom: 20,
+  },
+  commodityPickerHeader: {
+    alignItems: 'center',
+    paddingTop: 12,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  modalHandleBar: {
+    width: 40,
+    height: 4,
+    backgroundColor: COLORS.textSecondary,
+    borderRadius: 2,
+    marginBottom: 12,
+    opacity: 0.3,
+  },
+  commodityPickerTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: COLORS.textPrimary,
+  },
+  commodityList: {
+    paddingHorizontal: 20,
+    paddingTop: 8,
+  },
+  commodityOption: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+    backgroundColor: COLORS.white,
+  },
+  commodityOptionLast: {
+    borderBottomWidth: 0,
+  },
+  commodityOptionText: {
+    fontSize: 16,
+    color: COLORS.textPrimary,
+    fontWeight: '500',
   },
   checklistModalContent: {
     backgroundColor: COLORS.white,
