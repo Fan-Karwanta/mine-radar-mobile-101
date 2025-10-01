@@ -54,7 +54,7 @@ export default function Directory() {
   const [selectedClassification, setSelectedClassification] = useState('all');
   const [selectedType, setSelectedType] = useState('all');
   const [selectedCategory, setSelectedCategory] = useState(categories[0]); // Default to national
-  const [filtersCollapsed, setFiltersCollapsed] = useState(false);
+  const [filtersCollapsed, setFiltersCollapsed] = useState(true); // Filters closed by default for more table space
   const [directoryData, setDirectoryData] = useState([]);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -73,7 +73,7 @@ export default function Directory() {
   const ITEMS_PER_PAGE = 20; // Show 20 items at a time
   const [stats, setStats] = useState(null);
   const [filterOptions, setFilterOptions] = useState({
-    classifications: [],
+    commodities: [], // Changed from classifications to commodities
     types: [],
     statuses: ['Operating', 'Non-operating', 'Suspended', 'Expired', 'Cancelled', 'Care and Maintenance', 'Unknown']
   });
@@ -235,19 +235,27 @@ export default function Directory() {
 
       if (response.success && response.data) {
         const data = response.data;
-        let classifications = [];
+        let commodities = []; // Changed from classifications to commodities
         let types = [];
         let statuses = [];
 
         if (selectedCategory.id === 'hotspots') {
-          // For hotspots, use natureOfReportedIllegalAct for classification and typeOfCommodity for type
-          classifications = [...new Set(data.map(item => item.natureOfReportedIllegalAct).filter(Boolean))];
-          types = [...new Set(data.map(item => item.typeOfCommodity).filter(Boolean))];
+          // For hotspots: types = natureOfReportedIllegalAct, commodities = typeOfCommodity
+          types = [...new Set(data.map(item => item.natureOfReportedIllegalAct).filter(Boolean))];
+          commodities = [...new Set(data.map(item => item.typeOfCommodity).filter(Boolean))];
           statuses = [...new Set(data.map(item => item.actionsTaken).filter(Boolean))];
         } else {
-          // For national and local, use classification and type fields directly
-          classifications = [...new Set(data.map(item => item.classification).filter(Boolean))];
-          types = [...new Set(data.map(item => item.type).filter(Boolean))];
+          // For national and local: types = type field, commodities = classification field
+          const allTypes = [...new Set(data.map(item => item.type).filter(Boolean))];
+          
+          // Separate "Application for" types from regular types
+          const applicationTypes = allTypes.filter(type => type.toLowerCase().includes('application for')).sort();
+          const regularTypes = allTypes.filter(type => !type.toLowerCase().includes('application for')).sort();
+          
+          // Put "Application for" types first, then regular types
+          types = [...applicationTypes, ...regularTypes];
+          
+          commodities = [...new Set(data.map(item => item.classification).filter(Boolean))];
           statuses = [...new Set(data.map(item => item.status).filter(Boolean))];
         }
 
@@ -260,9 +268,9 @@ export default function Directory() {
           }
         });
         
-        console.log('Filter options - statuses:', statuses);
+        console.log('Filter options - types:', types, 'commodities:', commodities, 'statuses:', statuses);
         setFilterOptions({
-          classifications: classifications.sort(),
+          commodities: commodities.sort(), // Now correctly storing commodities
           types: types.sort(),
           statuses: statuses.sort()
         });
@@ -297,7 +305,7 @@ export default function Directory() {
     
     // Reset and initialize filter options when category changes
     setFilterOptions({
-      classifications: [],
+      commodities: [], // Changed from classifications to commodities
       types: [],
       statuses: ['Operating', 'Non-operating', 'Suspended', 'Expired', 'Cancelled', 'Care and Maintenance', 'Unknown']
     });
@@ -548,12 +556,12 @@ export default function Directory() {
           {selectedRecord && (
             <ScrollView style={styles.detailContent}>
               <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>{selectedCategory?.id === 'hotspots' ? 'COMPLAINT NO:' : 'PERMIT NO:'}</Text>
-                <Text style={styles.detailValue}>{selectedRecord.permitNumber}</Text>
+                <Text style={styles.detailLabel}>{selectedCategory?.id === 'hotspots' ? 'COMPLAINT NO:' : 'NO:'}</Text>
+                <Text style={styles.detailValue}>{selectedRecord.permitNumber}</Text> 
               </View>
               
               <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>{selectedCategory?.id === 'hotspots' ? 'SUBJECT:' : 'PERMIT HOLDER:'}</Text>
+                <Text style={styles.detailLabel}>{selectedCategory?.id === 'hotspots' ? 'SUBJECT:' : 'HOLDER:'}</Text>
                 <Text style={styles.detailValue}>{selectedRecord.permitHolder}</Text>
               </View>
 
@@ -570,7 +578,7 @@ export default function Directory() {
               </View>
               
               <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>COMMODITY:</Text>
+                <Text style={styles.detailLabel}>CLASSIFICATION:</Text>
                 <Text style={styles.detailValue}>{selectedRecord.commodity}</Text>
               </View>
               
@@ -1154,8 +1162,8 @@ export default function Directory() {
                 </Text>
                 <View style={styles.pickerContainer}>
                   <Picker
-                    selectedValue={selectedCategory?.id === 'hotspots' ? selectedClassification : selectedType}
-                    onValueChange={selectedCategory?.id === 'hotspots' ? setSelectedClassification : setSelectedType}
+                    selectedValue={selectedType}
+                    onValueChange={setSelectedType}
                     style={styles.picker}
                     dropdownIconColor={COLORS.primary}
                   >
@@ -1164,62 +1172,40 @@ export default function Directory() {
                       value="all" 
                       style={styles.pickerItem} 
                     />
-                    {selectedCategory?.id === 'hotspots' ? 
-                      filterOptions.classifications.map((classification) => (
-                        <Picker.Item 
-                          key={classification} 
-                          label={classification} 
-                          value={classification} 
-                          style={styles.pickerItem}
-                        />
-                      )) :
-                      filterOptions.types.map((type) => (
-                        <Picker.Item 
-                          key={type} 
-                          label={type} 
-                          value={type} 
-                          style={styles.pickerItem}
-                        />
-                      ))
-                    }
+                    {filterOptions.types.map((type) => (
+                      <Picker.Item 
+                        key={type} 
+                        label={type} 
+                        value={type} 
+                        style={styles.pickerItem}
+                      />
+                    ))}
                   </Picker>
                 </View>
               </View>
               
               <View style={styles.filterItem}>
-                <Text style={styles.filterLabel}>
-                  {selectedCategory?.id === 'hotspots' ? 'COMMODITY:' : 'COMMODITY:'}
-                </Text>
+                <Text style={styles.filterLabel}>CLASSIFICATION:</Text>
                 <View style={styles.pickerContainer}>
                   <Picker
-                    selectedValue={selectedCategory?.id === 'hotspots' ? selectedType : selectedClassification}
-                    onValueChange={selectedCategory?.id === 'hotspots' ? setSelectedType : setSelectedClassification}
+                    selectedValue={selectedClassification}
+                    onValueChange={setSelectedClassification}
                     style={styles.picker}
                     dropdownIconColor={COLORS.primary}
                   >
                     <Picker.Item 
-                      label="All Commodities" 
+                      label="All Classifications" 
                       value="all" 
                       style={styles.pickerItem} 
                     />
-                    {selectedCategory?.id === 'hotspots' ? 
-                      filterOptions.types.map((type) => (
-                        <Picker.Item 
-                          key={type} 
-                          label={type} 
-                          value={type} 
-                          style={styles.pickerItem}
-                        />
-                      )) :
-                      filterOptions.classifications.map((classification) => (
-                        <Picker.Item 
-                          key={classification} 
-                          label={classification} 
-                          value={classification} 
-                          style={styles.pickerItem}
-                        />
-                      ))
-                    }
+                    {filterOptions.commodities.map((commodity) => (
+                      <Picker.Item 
+                        key={commodity} 
+                        label={commodity} 
+                        value={commodity} 
+                        style={styles.pickerItem}
+                      />
+                    ))}
                   </Picker>
                 </View>
               </View>

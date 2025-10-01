@@ -2823,6 +2823,531 @@ export default function Reports() {
   const ReportDetailModal = () => {
     if (!selectedReport) return null;
     
+    const renderReportTypeSpecificFields = () => {
+      const reportType = selectedReport.reportType;
+      
+      // ILLEGAL MINING SPECIFIC FIELDS
+      if (reportType === 'illegal_mining' && selectedReport.miningData) {
+        return (
+          <>
+            {/* Project Information */}
+            {selectedReport.projectInfo && (
+              <View style={styles.detailSection}>
+                <Text style={styles.detailSectionTitle}>Project Information</Text>
+                <Text style={styles.detailLabel}>Project Information Board</Text>
+                <Text style={styles.detailValue}>
+                  {selectedReport.projectInfo.hasSignboard === 'yes' ? 'Yes' : 
+                   selectedReport.projectInfo.hasSignboard === 'no' ? 'No' : 'Not Determined'}
+                </Text>
+                {selectedReport.projectInfo.projectName && (
+                  <>
+                    <Text style={styles.detailLabel}>Project Name</Text>
+                    <Text style={styles.detailValue}>{selectedReport.projectInfo.projectName}</Text>
+                  </>
+                )}
+              </View>
+            )}
+            
+            {/* Operating Activities */}
+            {selectedReport.miningData.operatingActivities && (
+              <View style={styles.detailSection}>
+                <Text style={styles.detailSectionTitle}>Activities Observed</Text>
+                {selectedReport.miningData.operatingActivities.extraction?.active && (
+                  <>
+                    <Text style={styles.detailLabel}>✓ Extraction</Text>
+                    {selectedReport.miningData.operatingActivities.extraction.equipment?.length > 0 && (
+                      <Text style={styles.detailValue}>Equipment: {selectedReport.miningData.operatingActivities.extraction.equipment.join(', ')}</Text>
+                    )}
+                  </>
+                )}
+                {selectedReport.miningData.operatingActivities.disposition?.active && (
+                  <>
+                    <Text style={styles.detailLabel}>✓ Disposition/Transportation</Text>
+                    {selectedReport.miningData.operatingActivities.disposition.equipment?.length > 0 && (
+                      <Text style={styles.detailValue}>Equipment: {selectedReport.miningData.operatingActivities.disposition.equipment.join(', ')}</Text>
+                    )}
+                  </>
+                )}
+                {selectedReport.miningData.operatingActivities.processing?.active && (
+                  <>
+                    <Text style={styles.detailLabel}>✓ Mineral Processing</Text>
+                    {selectedReport.miningData.operatingActivities.processing.equipment?.length > 0 && (
+                      <Text style={styles.detailValue}>Equipment: {selectedReport.miningData.operatingActivities.processing.equipment.join(', ')}</Text>
+                    )}
+                  </>
+                )}
+              </View>
+            )}
+            
+            {/* Non-Operating Observations */}
+            {selectedReport.miningData.nonOperatingObservations && (
+              <View style={styles.detailSection}>
+                <Text style={styles.detailSectionTitle}>Observations in the Area</Text>
+                {selectedReport.miningData.nonOperatingObservations.excavations && (
+                  <Text style={styles.detailLabel}>✓ Excavations</Text>
+                )}
+                {selectedReport.miningData.nonOperatingObservations.accessRoad && (
+                  <Text style={styles.detailLabel}>✓ Access Road for Transport</Text>
+                )}
+                {selectedReport.miningData.nonOperatingObservations.processingFacility && (
+                  <Text style={styles.detailLabel}>✓ Mineral Processing Facility</Text>
+                )}
+              </View>
+            )}
+            
+            {/* Interview */}
+            {selectedReport.miningData.interview?.conducted && (
+              <View style={styles.detailSection}>
+                <Text style={styles.detailSectionTitle}>Community Interview</Text>
+                <Text style={styles.detailLabel}>Interview Conducted: Yes</Text>
+                {selectedReport.miningData.interview.responses?.recentActivity && (
+                  <>
+                    <Text style={styles.detailLabel}>Recent Activity</Text>
+                    <Text style={styles.detailValue}>{selectedReport.miningData.interview.responses.recentActivity}</Text>
+                  </>
+                )}
+                {selectedReport.miningData.interview.responses?.excavationStart && (
+                  <>
+                    <Text style={styles.detailLabel}>Excavation Start</Text>
+                    <Text style={styles.detailValue}>{selectedReport.miningData.interview.responses.excavationStart}</Text>
+                  </>
+                )}
+                {selectedReport.miningData.interview.responses?.transportVehicles && (
+                  <>
+                    <Text style={styles.detailLabel}>Transport Vehicles</Text>
+                    <Text style={styles.detailValue}>{selectedReport.miningData.interview.responses.transportVehicles}</Text>
+                  </>
+                )}
+                {selectedReport.miningData.interview.responses?.operatorName && (
+                  <>
+                    <Text style={styles.detailLabel}>Operator Name (from interview)</Text>
+                    <Text style={styles.detailValue}>{selectedReport.miningData.interview.responses.operatorName}</Text>
+                  </>
+                )}
+                {selectedReport.miningData.interview.responses?.operatorAddress && (
+                  <>
+                    <Text style={styles.detailLabel}>Operator Address (from interview)</Text>
+                    <Text style={styles.detailValue}>{selectedReport.miningData.interview.responses.operatorAddress}</Text>
+                  </>
+                )}
+                {selectedReport.miningData.interview.responses?.permits && (
+                  <>
+                    <Text style={styles.detailLabel}>Permits Information</Text>
+                    <Text style={styles.detailValue}>{selectedReport.miningData.interview.responses.permits}</Text>
+                  </>
+                )}
+              </View>
+            )}
+          </>
+        );
+      }
+      
+      // ILLEGAL TRANSPORTATION SPECIFIC FIELDS
+      if (reportType === 'illegal_transport' && selectedReport.transportData) {
+        return (
+          <>
+            <View style={styles.detailSection}>
+              <Text style={styles.detailSectionTitle}>Violation Details</Text>
+              <Text style={styles.detailLabel}>Type of Violation</Text>
+              <Text style={styles.detailValue}>
+                {selectedReport.transportData.violationType === 'absence' ? 'Absence of Transport Documents' :
+                 selectedReport.transportData.violationType === 'outdated' ? 'Outdated Transport Document' :
+                 selectedReport.transportData.violationType === 'fraudulent' ? 'Fraudulent Transport Document' : 'Not specified'}
+              </Text>
+              {selectedReport.transportData.documentType && (
+                <>
+                  <Text style={styles.detailLabel}>Document Type</Text>
+                  <Text style={styles.detailValue}>{selectedReport.transportData.documentType}</Text>
+                </>
+              )}
+            </View>
+            
+            {selectedReport.transportData.materialInfo && (
+              <View style={styles.detailSection}>
+                <Text style={styles.detailSectionTitle}>Material Information</Text>
+                {selectedReport.transportData.materialInfo.volumeWeight && (
+                  <>
+                    <Text style={styles.detailLabel}>Volume/Weight</Text>
+                    <Text style={styles.detailValue}>{selectedReport.transportData.materialInfo.volumeWeight}</Text>
+                  </>
+                )}
+                {selectedReport.transportData.materialInfo.unit && (
+                  <>
+                    <Text style={styles.detailLabel}>Unit</Text>
+                    <Text style={styles.detailValue}>{selectedReport.transportData.materialInfo.unit}</Text>
+                  </>
+                )}
+              </View>
+            )}
+            
+            {selectedReport.transportData.vehicleInfo && (
+              <View style={styles.detailSection}>
+                <Text style={styles.detailSectionTitle}>Vehicle Information</Text>
+                {selectedReport.transportData.vehicleInfo.type && (
+                  <>
+                    <Text style={styles.detailLabel}>Vehicle Type</Text>
+                    <Text style={styles.detailValue}>{selectedReport.transportData.vehicleInfo.type}</Text>
+                  </>
+                )}
+                {selectedReport.transportData.vehicleInfo.description && (
+                  <>
+                    <Text style={styles.detailLabel}>Description</Text>
+                    <Text style={styles.detailValue}>{selectedReport.transportData.vehicleInfo.description}</Text>
+                  </>
+                )}
+                {selectedReport.transportData.vehicleInfo.bodyColor && (
+                  <>
+                    <Text style={styles.detailLabel}>Body Color</Text>
+                    <Text style={styles.detailValue}>{selectedReport.transportData.vehicleInfo.bodyColor}</Text>
+                  </>
+                )}
+                {selectedReport.transportData.vehicleInfo.plateNumber && (
+                  <>
+                    <Text style={styles.detailLabel}>Plate Number</Text>
+                    <Text style={styles.detailValue}>{selectedReport.transportData.vehicleInfo.plateNumber}</Text>
+                  </>
+                )}
+              </View>
+            )}
+            
+            {selectedReport.transportData.ownerOperator && (
+              <View style={styles.detailSection}>
+                <Text style={styles.detailSectionTitle}>Owner/Operator</Text>
+                {selectedReport.transportData.ownerOperator.name && (
+                  <>
+                    <Text style={styles.detailLabel}>Name</Text>
+                    <Text style={styles.detailValue}>{selectedReport.transportData.ownerOperator.name}</Text>
+                  </>
+                )}
+                {selectedReport.transportData.ownerOperator.address && (
+                  <>
+                    <Text style={styles.detailLabel}>Address</Text>
+                    <Text style={styles.detailValue}>{selectedReport.transportData.ownerOperator.address}</Text>
+                  </>
+                )}
+              </View>
+            )}
+            
+            {selectedReport.transportData.driver && (
+              <View style={styles.detailSection}>
+                <Text style={styles.detailSectionTitle}>Driver Information</Text>
+                {selectedReport.transportData.driver.name && (
+                  <>
+                    <Text style={styles.detailLabel}>Name</Text>
+                    <Text style={styles.detailValue}>{selectedReport.transportData.driver.name}</Text>
+                  </>
+                )}
+                {selectedReport.transportData.driver.address && (
+                  <>
+                    <Text style={styles.detailLabel}>Address</Text>
+                    <Text style={styles.detailValue}>{selectedReport.transportData.driver.address}</Text>
+                  </>
+                )}
+              </View>
+            )}
+            
+            {selectedReport.transportData.sourceOfMaterials && (
+              <View style={styles.detailSection}>
+                <Text style={styles.detailLabel}>Source of Materials</Text>
+                <Text style={styles.detailValue}>{selectedReport.transportData.sourceOfMaterials}</Text>
+              </View>
+            )}
+            
+            {selectedReport.transportData.actionsTaken && (
+              <View style={styles.detailSection}>
+                <Text style={styles.detailLabel}>Actions Taken</Text>
+                <Text style={styles.detailValue}>{selectedReport.transportData.actionsTaken}</Text>
+              </View>
+            )}
+          </>
+        );
+      }
+      
+      // ILLEGAL PROCESSING SPECIFIC FIELDS
+      if (reportType === 'illegal_processing' && selectedReport.processingData) {
+        return (
+          <>
+            {selectedReport.processingData.facilityInfo && (
+              <View style={styles.detailSection}>
+                <Text style={styles.detailSectionTitle}>Facility Information</Text>
+                {selectedReport.processingData.facilityInfo.type && (
+                  <>
+                    <Text style={styles.detailLabel}>Facility Type</Text>
+                    <Text style={styles.detailValue}>{selectedReport.processingData.facilityInfo.type}</Text>
+                  </>
+                )}
+                {selectedReport.processingData.facilityInfo.processingProducts && (
+                  <>
+                    <Text style={styles.detailLabel}>Processing Products</Text>
+                    <Text style={styles.detailValue}>{selectedReport.processingData.facilityInfo.processingProducts}</Text>
+                  </>
+                )}
+              </View>
+            )}
+            
+            {selectedReport.processingData.rawMaterials && (
+              <View style={styles.detailSection}>
+                <Text style={styles.detailSectionTitle}>Raw Materials Source</Text>
+                {selectedReport.processingData.rawMaterials.sourceName && (
+                  <>
+                    <Text style={styles.detailLabel}>Source Name</Text>
+                    <Text style={styles.detailValue}>{selectedReport.processingData.rawMaterials.sourceName}</Text>
+                  </>
+                )}
+                {selectedReport.processingData.rawMaterials.sourceLocation && (
+                  <>
+                    <Text style={styles.detailLabel}>Source Location</Text>
+                    <Text style={styles.detailValue}>{selectedReport.processingData.rawMaterials.sourceLocation}</Text>
+                  </>
+                )}
+                {selectedReport.processingData.rawMaterials.determinationMethod && (
+                  <>
+                    <Text style={styles.detailLabel}>How Determined</Text>
+                    <Text style={styles.detailValue}>{selectedReport.processingData.rawMaterials.determinationMethod}</Text>
+                  </>
+                )}
+              </View>
+            )}
+          </>
+        );
+      }
+      
+      // ILLEGAL TRADING SPECIFIC FIELDS
+      if (reportType === 'illegal_trading' && selectedReport.tradingData) {
+        return (
+          <>
+            {selectedReport.tradingData.businessInfo && (
+              <View style={styles.detailSection}>
+                <Text style={styles.detailSectionTitle}>Business Information</Text>
+                {selectedReport.tradingData.businessInfo.name && (
+                  <>
+                    <Text style={styles.detailLabel}>Business Name</Text>
+                    <Text style={styles.detailValue}>{selectedReport.tradingData.businessInfo.name}</Text>
+                  </>
+                )}
+                {selectedReport.tradingData.businessInfo.owner && (
+                  <>
+                    <Text style={styles.detailLabel}>Owner</Text>
+                    <Text style={styles.detailValue}>{selectedReport.tradingData.businessInfo.owner}</Text>
+                  </>
+                )}
+                {selectedReport.tradingData.businessInfo.location && (
+                  <>
+                    <Text style={styles.detailLabel}>Business Location</Text>
+                    <Text style={styles.detailValue}>{selectedReport.tradingData.businessInfo.location}</Text>
+                  </>
+                )}
+              </View>
+            )}
+            
+            {selectedReport.tradingData.commoditySource && (
+              <View style={styles.detailSection}>
+                <Text style={styles.detailSectionTitle}>Commodity Source</Text>
+                {selectedReport.tradingData.commoditySource.name && (
+                  <>
+                    <Text style={styles.detailLabel}>Source Name</Text>
+                    <Text style={styles.detailValue}>{selectedReport.tradingData.commoditySource.name}</Text>
+                  </>
+                )}
+                {selectedReport.tradingData.commoditySource.location && (
+                  <>
+                    <Text style={styles.detailLabel}>Source Location</Text>
+                    <Text style={styles.detailValue}>{selectedReport.tradingData.commoditySource.location}</Text>
+                  </>
+                )}
+                {selectedReport.tradingData.commoditySource.determinationMethod && (
+                  <>
+                    <Text style={styles.detailLabel}>How Determined</Text>
+                    <Text style={styles.detailValue}>{selectedReport.tradingData.commoditySource.determinationMethod}</Text>
+                  </>
+                )}
+              </View>
+            )}
+            
+            {selectedReport.tradingData.stockpiledMaterials && (
+              <View style={styles.detailSection}>
+                <Text style={styles.detailLabel}>Stockpiled Materials</Text>
+                <Text style={styles.detailValue}>
+                  {selectedReport.tradingData.stockpiledMaterials === 'yes' ? 'Yes' :
+                   selectedReport.tradingData.stockpiledMaterials === 'no' ? 'No' : 'Not Determined'}
+                </Text>
+              </View>
+            )}
+            
+            {selectedReport.tradingData.dtiRegistration && (
+              <View style={styles.detailSection}>
+                <Text style={styles.detailLabel}>DTI Registration</Text>
+                <Text style={styles.detailValue}>
+                  {selectedReport.tradingData.dtiRegistration === 'yes' ? 'Yes' :
+                   selectedReport.tradingData.dtiRegistration === 'no' ? 'No' : 'Not Determined'}
+                </Text>
+              </View>
+            )}
+          </>
+        );
+      }
+      
+      // ILLEGAL EXPLORATION SPECIFIC FIELDS
+      if (reportType === 'illegal_exploration' && selectedReport.explorationData) {
+        return (
+          <>
+            <View style={styles.detailSection}>
+              <Text style={styles.detailSectionTitle}>Exploration Activities</Text>
+              {selectedReport.explorationData.activities?.drilling && (
+                <Text style={styles.detailLabel}>✓ Drilling</Text>
+              )}
+              {selectedReport.explorationData.activities?.testPitting && (
+                <Text style={styles.detailLabel}>✓ Test Pitting</Text>
+              )}
+              {selectedReport.explorationData.activities?.trenching && (
+                <Text style={styles.detailLabel}>✓ Trenching</Text>
+              )}
+              {selectedReport.explorationData.activities?.shaftSinking && (
+                <Text style={styles.detailLabel}>✓ Shaft Sinking</Text>
+              )}
+              {selectedReport.explorationData.activities?.tunneling && (
+                <Text style={styles.detailLabel}>✓ Tunneling</Text>
+              )}
+              {selectedReport.explorationData.activities?.others && (
+                <>
+                  <Text style={styles.detailLabel}>✓ Others</Text>
+                  {selectedReport.explorationData.othersActivity && (
+                    <Text style={styles.detailValue}>{selectedReport.explorationData.othersActivity}</Text>
+                  )}
+                </>
+              )}
+            </View>
+          </>
+        );
+      }
+      
+      // ILLEGAL SMALL-SCALE MINING SPECIFIC FIELDS
+      if (reportType === 'illegal_smallscale' && selectedReport.smallScaleData) {
+        return (
+          <>
+            {selectedReport.smallScaleData.operatingActivities && (
+              <View style={styles.detailSection}>
+                <Text style={styles.detailSectionTitle}>Operating Activities</Text>
+                {selectedReport.smallScaleData.operatingActivities.extraction && (
+                  <>
+                    <Text style={styles.detailLabel}>✓ Extraction</Text>
+                    {selectedReport.smallScaleData.equipmentUsed?.extraction && (
+                      <Text style={styles.detailValue}>Equipment: {selectedReport.smallScaleData.equipmentUsed.extraction}</Text>
+                    )}
+                  </>
+                )}
+                {selectedReport.smallScaleData.operatingActivities.disposition && (
+                  <>
+                    <Text style={styles.detailLabel}>✓ Disposition</Text>
+                    {selectedReport.smallScaleData.equipmentUsed?.disposition && (
+                      <Text style={styles.detailValue}>Equipment: {selectedReport.smallScaleData.equipmentUsed.disposition}</Text>
+                    )}
+                  </>
+                )}
+                {selectedReport.smallScaleData.operatingActivities.mineralProcessing && (
+                  <>
+                    <Text style={styles.detailLabel}>✓ Mineral Processing</Text>
+                    {selectedReport.smallScaleData.equipmentUsed?.mineralProcessing && (
+                      <Text style={styles.detailValue}>Equipment: {selectedReport.smallScaleData.equipmentUsed.mineralProcessing}</Text>
+                    )}
+                  </>
+                )}
+                {selectedReport.smallScaleData.operatingActivities.tunneling && (
+                  <Text style={styles.detailLabel}>✓ Tunneling</Text>
+                )}
+                {selectedReport.smallScaleData.operatingActivities.shaftSinking && (
+                  <Text style={styles.detailLabel}>✓ Shaft Sinking</Text>
+                )}
+                {selectedReport.smallScaleData.operatingActivities.goldPanning && (
+                  <Text style={styles.detailLabel}>✓ Gold Panning</Text>
+                )}
+                {selectedReport.smallScaleData.operatingActivities.amalgamation && (
+                  <Text style={styles.detailLabel}>✓ Amalgamation</Text>
+                )}
+                {selectedReport.smallScaleData.operatingActivities.others && (
+                  <>
+                    <Text style={styles.detailLabel}>✓ Others</Text>
+                    {selectedReport.smallScaleData.othersActivity && (
+                      <Text style={styles.detailValue}>{selectedReport.smallScaleData.othersActivity}</Text>
+                    )}
+                  </>
+                )}
+              </View>
+            )}
+            
+            {selectedReport.smallScaleData.nonOperatingObservations && (
+              <View style={styles.detailSection}>
+                <Text style={styles.detailSectionTitle}>Observations</Text>
+                {selectedReport.smallScaleData.nonOperatingObservations.excavations && (
+                  <Text style={styles.detailLabel}>✓ Excavations</Text>
+                )}
+                {selectedReport.smallScaleData.nonOperatingObservations.stockpiles && (
+                  <Text style={styles.detailLabel}>✓ Stockpiles</Text>
+                )}
+                {selectedReport.smallScaleData.nonOperatingObservations.tunnels && (
+                  <Text style={styles.detailLabel}>✓ Tunnels</Text>
+                )}
+                {selectedReport.smallScaleData.nonOperatingObservations.mineShafts && (
+                  <Text style={styles.detailLabel}>✓ Mine Shafts</Text>
+                )}
+                {selectedReport.smallScaleData.nonOperatingObservations.accessRoad && (
+                  <Text style={styles.detailLabel}>✓ Access Road</Text>
+                )}
+                {selectedReport.smallScaleData.nonOperatingObservations.processingFacility && (
+                  <Text style={styles.detailLabel}>✓ Processing Facility</Text>
+                )}
+              </View>
+            )}
+            
+            {selectedReport.smallScaleData.interview?.conducted && (
+              <View style={styles.detailSection}>
+                <Text style={styles.detailSectionTitle}>Community Interview</Text>
+                <Text style={styles.detailLabel}>Interview Conducted: Yes</Text>
+                {selectedReport.smallScaleData.interview.responses?.question1 && (
+                  <>
+                    <Text style={styles.detailLabel}>Question 1</Text>
+                    <Text style={styles.detailValue}>{selectedReport.smallScaleData.interview.responses.question1}</Text>
+                  </>
+                )}
+                {selectedReport.smallScaleData.interview.responses?.question2 && (
+                  <>
+                    <Text style={styles.detailLabel}>Question 2</Text>
+                    <Text style={styles.detailValue}>{selectedReport.smallScaleData.interview.responses.question2}</Text>
+                  </>
+                )}
+                {selectedReport.smallScaleData.interview.responses?.question3 && (
+                  <>
+                    <Text style={styles.detailLabel}>Question 3</Text>
+                    <Text style={styles.detailValue}>{selectedReport.smallScaleData.interview.responses.question3}</Text>
+                  </>
+                )}
+                {selectedReport.smallScaleData.interview.responses?.question4 && (
+                  <>
+                    <Text style={styles.detailLabel}>Question 4</Text>
+                    <Text style={styles.detailValue}>{selectedReport.smallScaleData.interview.responses.question4}</Text>
+                  </>
+                )}
+                {selectedReport.smallScaleData.interview.responses?.question5 && (
+                  <>
+                    <Text style={styles.detailLabel}>Question 5</Text>
+                    <Text style={styles.detailValue}>{selectedReport.smallScaleData.interview.responses.question5}</Text>
+                  </>
+                )}
+                {selectedReport.smallScaleData.interview.responses?.question6 && (
+                  <>
+                    <Text style={styles.detailLabel}>Question 6</Text>
+                    <Text style={styles.detailValue}>{selectedReport.smallScaleData.interview.responses.question6}</Text>
+                  </>
+                )}
+              </View>
+            )}
+          </>
+        );
+      }
+      
+      return null;
+    };
+    
     return (
       <Modal visible={showReportDetail} transparent animationType="slide">
         <View style={styles.modalOverlay}>
@@ -2891,9 +3416,41 @@ export default function Reports() {
               {selectedReport.siteStatus && (
                 <View style={styles.detailSection}>
                   <Text style={styles.detailLabel}>Site Status</Text>
-                  <Text style={styles.detailValue}>{selectedReport.siteStatus}</Text>
+                  <Text style={styles.detailValue}>
+                    {selectedReport.siteStatus === 'operating' ? 'Operating' :
+                     selectedReport.siteStatus === 'non_operating' ? 'Non-Operating' : 
+                     selectedReport.siteStatus === 'under_construction' ? 'Under Construction' : selectedReport.siteStatus}
+                  </Text>
                 </View>
               )}
+              
+              {/* Operator Information */}
+              {selectedReport.operatorInfo && (selectedReport.operatorInfo.name || selectedReport.operatorInfo.address) && (
+                <View style={styles.detailSection}>
+                  <Text style={styles.detailSectionTitle}>Operator Information</Text>
+                  {selectedReport.operatorInfo.name && (
+                    <>
+                      <Text style={styles.detailLabel}>Name</Text>
+                      <Text style={styles.detailValue}>{selectedReport.operatorInfo.name}</Text>
+                    </>
+                  )}
+                  {selectedReport.operatorInfo.address && (
+                    <>
+                      <Text style={styles.detailLabel}>Address</Text>
+                      <Text style={styles.detailValue}>{selectedReport.operatorInfo.address}</Text>
+                    </>
+                  )}
+                  {selectedReport.operatorInfo.determinationMethod && (
+                    <>
+                      <Text style={styles.detailLabel}>How Determined</Text>
+                      <Text style={styles.detailValue}>{selectedReport.operatorInfo.determinationMethod}</Text>
+                    </>
+                  )}
+                </View>
+              )}
+              
+              {/* Report Type Specific Fields */}
+              {renderReportTypeSpecificFields()}
               
               {/* Additional Information */}
               {selectedReport.additionalInfo && (
@@ -2963,6 +3520,531 @@ export default function Reports() {
   const DraftDetailModal = () => {
     if (!selectedDraft) return null;
     
+    const renderDraftTypeSpecificFields = () => {
+      const reportType = selectedDraft.reportType;
+      
+      // ILLEGAL MINING SPECIFIC FIELDS
+      if (reportType === 'illegal_mining' && selectedDraft.miningData) {
+        return (
+          <>
+            {/* Project Information */}
+            {selectedDraft.projectInfo && (
+              <View style={styles.detailSection}>
+                <Text style={styles.detailSectionTitle}>Project Information</Text>
+                <Text style={styles.detailLabel}>Project Information Board</Text>
+                <Text style={styles.detailValue}>
+                  {selectedDraft.projectInfo.hasSignboard === 'yes' ? 'Yes' : 
+                   selectedDraft.projectInfo.hasSignboard === 'no' ? 'No' : 'Not Determined'}
+                </Text>
+                {selectedDraft.projectInfo.projectName && (
+                  <>
+                    <Text style={styles.detailLabel}>Project Name</Text>
+                    <Text style={styles.detailValue}>{selectedDraft.projectInfo.projectName}</Text>
+                  </>
+                )}
+              </View>
+            )}
+            
+            {/* Operating Activities */}
+            {selectedDraft.miningData.operatingActivities && (
+              <View style={styles.detailSection}>
+                <Text style={styles.detailSectionTitle}>Activities Observed</Text>
+                {selectedDraft.miningData.operatingActivities.extraction?.active && (
+                  <>
+                    <Text style={styles.detailLabel}>✓ Extraction</Text>
+                    {selectedDraft.miningData.operatingActivities.extraction.equipment?.length > 0 && (
+                      <Text style={styles.detailValue}>Equipment: {selectedDraft.miningData.operatingActivities.extraction.equipment.join(', ')}</Text>
+                    )}
+                  </>
+                )}
+                {selectedDraft.miningData.operatingActivities.disposition?.active && (
+                  <>
+                    <Text style={styles.detailLabel}>✓ Disposition/Transportation</Text>
+                    {selectedDraft.miningData.operatingActivities.disposition.equipment?.length > 0 && (
+                      <Text style={styles.detailValue}>Equipment: {selectedDraft.miningData.operatingActivities.disposition.equipment.join(', ')}</Text>
+                    )}
+                  </>
+                )}
+                {selectedDraft.miningData.operatingActivities.processing?.active && (
+                  <>
+                    <Text style={styles.detailLabel}>✓ Mineral Processing</Text>
+                    {selectedDraft.miningData.operatingActivities.processing.equipment?.length > 0 && (
+                      <Text style={styles.detailValue}>Equipment: {selectedDraft.miningData.operatingActivities.processing.equipment.join(', ')}</Text>
+                    )}
+                  </>
+                )}
+              </View>
+            )}
+            
+            {/* Non-Operating Observations */}
+            {selectedDraft.miningData.nonOperatingObservations && (
+              <View style={styles.detailSection}>
+                <Text style={styles.detailSectionTitle}>Observations in the Area</Text>
+                {selectedDraft.miningData.nonOperatingObservations.excavations && (
+                  <Text style={styles.detailLabel}>✓ Excavations</Text>
+                )}
+                {selectedDraft.miningData.nonOperatingObservations.accessRoad && (
+                  <Text style={styles.detailLabel}>✓ Access Road for Transport</Text>
+                )}
+                {selectedDraft.miningData.nonOperatingObservations.processingFacility && (
+                  <Text style={styles.detailLabel}>✓ Mineral Processing Facility</Text>
+                )}
+              </View>
+            )}
+            
+            {/* Interview */}
+            {selectedDraft.miningData.interview?.conducted && (
+              <View style={styles.detailSection}>
+                <Text style={styles.detailSectionTitle}>Community Interview</Text>
+                <Text style={styles.detailLabel}>Interview Conducted: Yes</Text>
+                {selectedDraft.miningData.interview.responses?.recentActivity && (
+                  <>
+                    <Text style={styles.detailLabel}>Recent Activity</Text>
+                    <Text style={styles.detailValue}>{selectedDraft.miningData.interview.responses.recentActivity}</Text>
+                  </>
+                )}
+                {selectedDraft.miningData.interview.responses?.excavationStart && (
+                  <>
+                    <Text style={styles.detailLabel}>Excavation Start</Text>
+                    <Text style={styles.detailValue}>{selectedDraft.miningData.interview.responses.excavationStart}</Text>
+                  </>
+                )}
+                {selectedDraft.miningData.interview.responses?.transportVehicles && (
+                  <>
+                    <Text style={styles.detailLabel}>Transport Vehicles</Text>
+                    <Text style={styles.detailValue}>{selectedDraft.miningData.interview.responses.transportVehicles}</Text>
+                  </>
+                )}
+                {selectedDraft.miningData.interview.responses?.operatorName && (
+                  <>
+                    <Text style={styles.detailLabel}>Operator Name (from interview)</Text>
+                    <Text style={styles.detailValue}>{selectedDraft.miningData.interview.responses.operatorName}</Text>
+                  </>
+                )}
+                {selectedDraft.miningData.interview.responses?.operatorAddress && (
+                  <>
+                    <Text style={styles.detailLabel}>Operator Address (from interview)</Text>
+                    <Text style={styles.detailValue}>{selectedDraft.miningData.interview.responses.operatorAddress}</Text>
+                  </>
+                )}
+                {selectedDraft.miningData.interview.responses?.permits && (
+                  <>
+                    <Text style={styles.detailLabel}>Permits Information</Text>
+                    <Text style={styles.detailValue}>{selectedDraft.miningData.interview.responses.permits}</Text>
+                  </>
+                )}
+              </View>
+            )}
+          </>
+        );
+      }
+      
+      // ILLEGAL TRANSPORTATION SPECIFIC FIELDS
+      if (reportType === 'illegal_transport' && selectedDraft.transportData) {
+        return (
+          <>
+            <View style={styles.detailSection}>
+              <Text style={styles.detailSectionTitle}>Violation Details</Text>
+              <Text style={styles.detailLabel}>Type of Violation</Text>
+              <Text style={styles.detailValue}>
+                {selectedDraft.transportData.violationType === 'absence' ? 'Absence of Transport Documents' :
+                 selectedDraft.transportData.violationType === 'outdated' ? 'Outdated Transport Document' :
+                 selectedDraft.transportData.violationType === 'fraudulent' ? 'Fraudulent Transport Document' : 'Not specified'}
+              </Text>
+              {selectedDraft.transportData.documentType && (
+                <>
+                  <Text style={styles.detailLabel}>Document Type</Text>
+                  <Text style={styles.detailValue}>{selectedDraft.transportData.documentType}</Text>
+                </>
+              )}
+            </View>
+            
+            {selectedDraft.transportData.materialInfo && (
+              <View style={styles.detailSection}>
+                <Text style={styles.detailSectionTitle}>Material Information</Text>
+                {selectedDraft.transportData.materialInfo.volumeWeight && (
+                  <>
+                    <Text style={styles.detailLabel}>Volume/Weight</Text>
+                    <Text style={styles.detailValue}>{selectedDraft.transportData.materialInfo.volumeWeight}</Text>
+                  </>
+                )}
+                {selectedDraft.transportData.materialInfo.unit && (
+                  <>
+                    <Text style={styles.detailLabel}>Unit</Text>
+                    <Text style={styles.detailValue}>{selectedDraft.transportData.materialInfo.unit}</Text>
+                  </>
+                )}
+              </View>
+            )}
+            
+            {selectedDraft.transportData.vehicleInfo && (
+              <View style={styles.detailSection}>
+                <Text style={styles.detailSectionTitle}>Vehicle Information</Text>
+                {selectedDraft.transportData.vehicleInfo.type && (
+                  <>
+                    <Text style={styles.detailLabel}>Vehicle Type</Text>
+                    <Text style={styles.detailValue}>{selectedDraft.transportData.vehicleInfo.type}</Text>
+                  </>
+                )}
+                {selectedDraft.transportData.vehicleInfo.description && (
+                  <>
+                    <Text style={styles.detailLabel}>Description</Text>
+                    <Text style={styles.detailValue}>{selectedDraft.transportData.vehicleInfo.description}</Text>
+                  </>
+                )}
+                {selectedDraft.transportData.vehicleInfo.bodyColor && (
+                  <>
+                    <Text style={styles.detailLabel}>Body Color</Text>
+                    <Text style={styles.detailValue}>{selectedDraft.transportData.vehicleInfo.bodyColor}</Text>
+                  </>
+                )}
+                {selectedDraft.transportData.vehicleInfo.plateNumber && (
+                  <>
+                    <Text style={styles.detailLabel}>Plate Number</Text>
+                    <Text style={styles.detailValue}>{selectedDraft.transportData.vehicleInfo.plateNumber}</Text>
+                  </>
+                )}
+              </View>
+            )}
+            
+            {selectedDraft.transportData.ownerOperator && (
+              <View style={styles.detailSection}>
+                <Text style={styles.detailSectionTitle}>Owner/Operator</Text>
+                {selectedDraft.transportData.ownerOperator.name && (
+                  <>
+                    <Text style={styles.detailLabel}>Name</Text>
+                    <Text style={styles.detailValue}>{selectedDraft.transportData.ownerOperator.name}</Text>
+                  </>
+                )}
+                {selectedDraft.transportData.ownerOperator.address && (
+                  <>
+                    <Text style={styles.detailLabel}>Address</Text>
+                    <Text style={styles.detailValue}>{selectedDraft.transportData.ownerOperator.address}</Text>
+                  </>
+                )}
+              </View>
+            )}
+            
+            {selectedDraft.transportData.driver && (
+              <View style={styles.detailSection}>
+                <Text style={styles.detailSectionTitle}>Driver Information</Text>
+                {selectedDraft.transportData.driver.name && (
+                  <>
+                    <Text style={styles.detailLabel}>Name</Text>
+                    <Text style={styles.detailValue}>{selectedDraft.transportData.driver.name}</Text>
+                  </>
+                )}
+                {selectedDraft.transportData.driver.address && (
+                  <>
+                    <Text style={styles.detailLabel}>Address</Text>
+                    <Text style={styles.detailValue}>{selectedDraft.transportData.driver.address}</Text>
+                  </>
+                )}
+              </View>
+            )}
+            
+            {selectedDraft.transportData.sourceOfMaterials && (
+              <View style={styles.detailSection}>
+                <Text style={styles.detailLabel}>Source of Materials</Text>
+                <Text style={styles.detailValue}>{selectedDraft.transportData.sourceOfMaterials}</Text>
+              </View>
+            )}
+            
+            {selectedDraft.transportData.actionsTaken && (
+              <View style={styles.detailSection}>
+                <Text style={styles.detailLabel}>Actions Taken</Text>
+                <Text style={styles.detailValue}>{selectedDraft.transportData.actionsTaken}</Text>
+              </View>
+            )}
+          </>
+        );
+      }
+      
+      // ILLEGAL PROCESSING SPECIFIC FIELDS
+      if (reportType === 'illegal_processing' && selectedDraft.processingData) {
+        return (
+          <>
+            {selectedDraft.processingData.facilityInfo && (
+              <View style={styles.detailSection}>
+                <Text style={styles.detailSectionTitle}>Facility Information</Text>
+                {selectedDraft.processingData.facilityInfo.type && (
+                  <>
+                    <Text style={styles.detailLabel}>Facility Type</Text>
+                    <Text style={styles.detailValue}>{selectedDraft.processingData.facilityInfo.type}</Text>
+                  </>
+                )}
+                {selectedDraft.processingData.facilityInfo.processingProducts && (
+                  <>
+                    <Text style={styles.detailLabel}>Processing Products</Text>
+                    <Text style={styles.detailValue}>{selectedDraft.processingData.facilityInfo.processingProducts}</Text>
+                  </>
+                )}
+              </View>
+            )}
+            
+            {selectedDraft.processingData.rawMaterials && (
+              <View style={styles.detailSection}>
+                <Text style={styles.detailSectionTitle}>Raw Materials Source</Text>
+                {selectedDraft.processingData.rawMaterials.sourceName && (
+                  <>
+                    <Text style={styles.detailLabel}>Source Name</Text>
+                    <Text style={styles.detailValue}>{selectedDraft.processingData.rawMaterials.sourceName}</Text>
+                  </>
+                )}
+                {selectedDraft.processingData.rawMaterials.sourceLocation && (
+                  <>
+                    <Text style={styles.detailLabel}>Source Location</Text>
+                    <Text style={styles.detailValue}>{selectedDraft.processingData.rawMaterials.sourceLocation}</Text>
+                  </>
+                )}
+                {selectedDraft.processingData.rawMaterials.determinationMethod && (
+                  <>
+                    <Text style={styles.detailLabel}>How Determined</Text>
+                    <Text style={styles.detailValue}>{selectedDraft.processingData.rawMaterials.determinationMethod}</Text>
+                  </>
+                )}
+              </View>
+            )}
+          </>
+        );
+      }
+      
+      // ILLEGAL TRADING SPECIFIC FIELDS
+      if (reportType === 'illegal_trading' && selectedDraft.tradingData) {
+        return (
+          <>
+            {selectedDraft.tradingData.businessInfo && (
+              <View style={styles.detailSection}>
+                <Text style={styles.detailSectionTitle}>Business Information</Text>
+                {selectedDraft.tradingData.businessInfo.name && (
+                  <>
+                    <Text style={styles.detailLabel}>Business Name</Text>
+                    <Text style={styles.detailValue}>{selectedDraft.tradingData.businessInfo.name}</Text>
+                  </>
+                )}
+                {selectedDraft.tradingData.businessInfo.owner && (
+                  <>
+                    <Text style={styles.detailLabel}>Owner</Text>
+                    <Text style={styles.detailValue}>{selectedDraft.tradingData.businessInfo.owner}</Text>
+                  </>
+                )}
+                {selectedDraft.tradingData.businessInfo.location && (
+                  <>
+                    <Text style={styles.detailLabel}>Business Location</Text>
+                    <Text style={styles.detailValue}>{selectedDraft.tradingData.businessInfo.location}</Text>
+                  </>
+                )}
+              </View>
+            )}
+            
+            {selectedDraft.tradingData.commoditySource && (
+              <View style={styles.detailSection}>
+                <Text style={styles.detailSectionTitle}>Commodity Source</Text>
+                {selectedDraft.tradingData.commoditySource.name && (
+                  <>
+                    <Text style={styles.detailLabel}>Source Name</Text>
+                    <Text style={styles.detailValue}>{selectedDraft.tradingData.commoditySource.name}</Text>
+                  </>
+                )}
+                {selectedDraft.tradingData.commoditySource.location && (
+                  <>
+                    <Text style={styles.detailLabel}>Source Location</Text>
+                    <Text style={styles.detailValue}>{selectedDraft.tradingData.commoditySource.location}</Text>
+                  </>
+                )}
+                {selectedDraft.tradingData.commoditySource.determinationMethod && (
+                  <>
+                    <Text style={styles.detailLabel}>How Determined</Text>
+                    <Text style={styles.detailValue}>{selectedDraft.tradingData.commoditySource.determinationMethod}</Text>
+                  </>
+                )}
+              </View>
+            )}
+            
+            {selectedDraft.tradingData.stockpiledMaterials && (
+              <View style={styles.detailSection}>
+                <Text style={styles.detailLabel}>Stockpiled Materials</Text>
+                <Text style={styles.detailValue}>
+                  {selectedDraft.tradingData.stockpiledMaterials === 'yes' ? 'Yes' :
+                   selectedDraft.tradingData.stockpiledMaterials === 'no' ? 'No' : 'Not Determined'}
+                </Text>
+              </View>
+            )}
+            
+            {selectedDraft.tradingData.dtiRegistration && (
+              <View style={styles.detailSection}>
+                <Text style={styles.detailLabel}>DTI Registration</Text>
+                <Text style={styles.detailValue}>
+                  {selectedDraft.tradingData.dtiRegistration === 'yes' ? 'Yes' :
+                   selectedDraft.tradingData.dtiRegistration === 'no' ? 'No' : 'Not Determined'}
+                </Text>
+              </View>
+            )}
+          </>
+        );
+      }
+      
+      // ILLEGAL EXPLORATION SPECIFIC FIELDS
+      if (reportType === 'illegal_exploration' && selectedDraft.explorationData) {
+        return (
+          <>
+            <View style={styles.detailSection}>
+              <Text style={styles.detailSectionTitle}>Exploration Activities</Text>
+              {selectedDraft.explorationData.activities?.drilling && (
+                <Text style={styles.detailLabel}>✓ Drilling</Text>
+              )}
+              {selectedDraft.explorationData.activities?.testPitting && (
+                <Text style={styles.detailLabel}>✓ Test Pitting</Text>
+              )}
+              {selectedDraft.explorationData.activities?.trenching && (
+                <Text style={styles.detailLabel}>✓ Trenching</Text>
+              )}
+              {selectedDraft.explorationData.activities?.shaftSinking && (
+                <Text style={styles.detailLabel}>✓ Shaft Sinking</Text>
+              )}
+              {selectedDraft.explorationData.activities?.tunneling && (
+                <Text style={styles.detailLabel}>✓ Tunneling</Text>
+              )}
+              {selectedDraft.explorationData.activities?.others && (
+                <>
+                  <Text style={styles.detailLabel}>✓ Others</Text>
+                  {selectedDraft.explorationData.othersActivity && (
+                    <Text style={styles.detailValue}>{selectedDraft.explorationData.othersActivity}</Text>
+                  )}
+                </>
+              )}
+            </View>
+          </>
+        );
+      }
+      
+      // ILLEGAL SMALL-SCALE MINING SPECIFIC FIELDS
+      if (reportType === 'illegal_smallscale' && selectedDraft.smallScaleData) {
+        return (
+          <>
+            {selectedDraft.smallScaleData.operatingActivities && (
+              <View style={styles.detailSection}>
+                <Text style={styles.detailSectionTitle}>Operating Activities</Text>
+                {selectedDraft.smallScaleData.operatingActivities.extraction && (
+                  <>
+                    <Text style={styles.detailLabel}>✓ Extraction</Text>
+                    {selectedDraft.smallScaleData.equipmentUsed?.extraction && (
+                      <Text style={styles.detailValue}>Equipment: {selectedDraft.smallScaleData.equipmentUsed.extraction}</Text>
+                    )}
+                  </>
+                )}
+                {selectedDraft.smallScaleData.operatingActivities.disposition && (
+                  <>
+                    <Text style={styles.detailLabel}>✓ Disposition</Text>
+                    {selectedDraft.smallScaleData.equipmentUsed?.disposition && (
+                      <Text style={styles.detailValue}>Equipment: {selectedDraft.smallScaleData.equipmentUsed.disposition}</Text>
+                    )}
+                  </>
+                )}
+                {selectedDraft.smallScaleData.operatingActivities.mineralProcessing && (
+                  <>
+                    <Text style={styles.detailLabel}>✓ Mineral Processing</Text>
+                    {selectedDraft.smallScaleData.equipmentUsed?.mineralProcessing && (
+                      <Text style={styles.detailValue}>Equipment: {selectedDraft.smallScaleData.equipmentUsed.mineralProcessing}</Text>
+                    )}
+                  </>
+                )}
+                {selectedDraft.smallScaleData.operatingActivities.tunneling && (
+                  <Text style={styles.detailLabel}>✓ Tunneling</Text>
+                )}
+                {selectedDraft.smallScaleData.operatingActivities.shaftSinking && (
+                  <Text style={styles.detailLabel}>✓ Shaft Sinking</Text>
+                )}
+                {selectedDraft.smallScaleData.operatingActivities.goldPanning && (
+                  <Text style={styles.detailLabel}>✓ Gold Panning</Text>
+                )}
+                {selectedDraft.smallScaleData.operatingActivities.amalgamation && (
+                  <Text style={styles.detailLabel}>✓ Amalgamation</Text>
+                )}
+                {selectedDraft.smallScaleData.operatingActivities.others && (
+                  <>
+                    <Text style={styles.detailLabel}>✓ Others</Text>
+                    {selectedDraft.smallScaleData.othersActivity && (
+                      <Text style={styles.detailValue}>{selectedDraft.smallScaleData.othersActivity}</Text>
+                    )}
+                  </>
+                )}
+              </View>
+            )}
+            
+            {selectedDraft.smallScaleData.nonOperatingObservations && (
+              <View style={styles.detailSection}>
+                <Text style={styles.detailSectionTitle}>Observations</Text>
+                {selectedDraft.smallScaleData.nonOperatingObservations.excavations && (
+                  <Text style={styles.detailLabel}>✓ Excavations</Text>
+                )}
+                {selectedDraft.smallScaleData.nonOperatingObservations.stockpiles && (
+                  <Text style={styles.detailLabel}>✓ Stockpiles</Text>
+                )}
+                {selectedDraft.smallScaleData.nonOperatingObservations.tunnels && (
+                  <Text style={styles.detailLabel}>✓ Tunnels</Text>
+                )}
+                {selectedDraft.smallScaleData.nonOperatingObservations.mineShafts && (
+                  <Text style={styles.detailLabel}>✓ Mine Shafts</Text>
+                )}
+                {selectedDraft.smallScaleData.nonOperatingObservations.accessRoad && (
+                  <Text style={styles.detailLabel}>✓ Access Road</Text>
+                )}
+                {selectedDraft.smallScaleData.nonOperatingObservations.processingFacility && (
+                  <Text style={styles.detailLabel}>✓ Processing Facility</Text>
+                )}
+              </View>
+            )}
+            
+            {selectedDraft.smallScaleData.interview?.conducted && (
+              <View style={styles.detailSection}>
+                <Text style={styles.detailSectionTitle}>Community Interview</Text>
+                <Text style={styles.detailLabel}>Interview Conducted: Yes</Text>
+                {selectedDraft.smallScaleData.interview.responses?.question1 && (
+                  <>
+                    <Text style={styles.detailLabel}>Question 1</Text>
+                    <Text style={styles.detailValue}>{selectedDraft.smallScaleData.interview.responses.question1}</Text>
+                  </>
+                )}
+                {selectedDraft.smallScaleData.interview.responses?.question2 && (
+                  <>
+                    <Text style={styles.detailLabel}>Question 2</Text>
+                    <Text style={styles.detailValue}>{selectedDraft.smallScaleData.interview.responses.question2}</Text>
+                  </>
+                )}
+                {selectedDraft.smallScaleData.interview.responses?.question3 && (
+                  <>
+                    <Text style={styles.detailLabel}>Question 3</Text>
+                    <Text style={styles.detailValue}>{selectedDraft.smallScaleData.interview.responses.question3}</Text>
+                  </>
+                )}
+                {selectedDraft.smallScaleData.interview.responses?.question4 && (
+                  <>
+                    <Text style={styles.detailLabel}>Question 4</Text>
+                    <Text style={styles.detailValue}>{selectedDraft.smallScaleData.interview.responses.question4}</Text>
+                  </>
+                )}
+                {selectedDraft.smallScaleData.interview.responses?.question5 && (
+                  <>
+                    <Text style={styles.detailLabel}>Question 5</Text>
+                    <Text style={styles.detailValue}>{selectedDraft.smallScaleData.interview.responses.question5}</Text>
+                  </>
+                )}
+                {selectedDraft.smallScaleData.interview.responses?.question6 && (
+                  <>
+                    <Text style={styles.detailLabel}>Question 6</Text>
+                    <Text style={styles.detailValue}>{selectedDraft.smallScaleData.interview.responses.question6}</Text>
+                  </>
+                )}
+              </View>
+            )}
+          </>
+        );
+      }
+      
+      return null;
+    };
+    
     return (
       <Modal visible={showDraftDetail} transparent animationType="slide">
         <View style={styles.modalOverlay}>
@@ -3029,9 +4111,41 @@ export default function Reports() {
               {selectedDraft.siteStatus && (
                 <View style={styles.detailSection}>
                   <Text style={styles.detailLabel}>Site Status</Text>
-                  <Text style={styles.detailValue}>{selectedDraft.siteStatus}</Text>
+                  <Text style={styles.detailValue}>
+                    {selectedDraft.siteStatus === 'operating' ? 'Operating' :
+                     selectedDraft.siteStatus === 'non_operating' ? 'Non-Operating' : 
+                     selectedDraft.siteStatus === 'under_construction' ? 'Under Construction' : selectedDraft.siteStatus}
+                  </Text>
                 </View>
               )}
+              
+              {/* Operator Information */}
+              {selectedDraft.operatorInfo && (selectedDraft.operatorInfo.name || selectedDraft.operatorInfo.address) && (
+                <View style={styles.detailSection}>
+                  <Text style={styles.detailSectionTitle}>Operator Information</Text>
+                  {selectedDraft.operatorInfo.name && (
+                    <>
+                      <Text style={styles.detailLabel}>Name</Text>
+                      <Text style={styles.detailValue}>{selectedDraft.operatorInfo.name}</Text>
+                    </>
+                  )}
+                  {selectedDraft.operatorInfo.address && (
+                    <>
+                      <Text style={styles.detailLabel}>Address</Text>
+                      <Text style={styles.detailValue}>{selectedDraft.operatorInfo.address}</Text>
+                    </>
+                  )}
+                  {selectedDraft.operatorInfo.determinationMethod && (
+                    <>
+                      <Text style={styles.detailLabel}>How Determined</Text>
+                      <Text style={styles.detailValue}>{selectedDraft.operatorInfo.determinationMethod}</Text>
+                    </>
+                  )}
+                </View>
+              )}
+              
+              {/* Draft Type Specific Fields */}
+              {renderDraftTypeSpecificFields()}
               
               {/* Additional Information */}
               {selectedDraft.additionalInfo && (
@@ -3186,15 +4300,15 @@ export default function Reports() {
           </View>
         </View>
         <TouchableOpacity 
-          style={[styles.getLocationButton, isLoadingTransportationLocation && styles.buttonDisabled]}
-          onPress={handleTransportationGetCurrentLocation}
-          disabled={isLoadingTransportationLocation}
+          style={[styles.getLocationButton, isLoadingLocation && styles.buttonDisabled]}
+          onPress={handleGetCurrentLocation}
+          disabled={isLoadingLocation}
         >
-          {isLoadingTransportationLocation && (
+          {isLoadingLocation && (
             <ActivityIndicator size="small" color="#2196F3" style={styles.buttonSpinner} />
           )}
           <Text style={styles.getLocationText}>
-            {isLoadingTransportationLocation ? 'Getting Location...' : t.getCoordinates}
+            {isLoadingLocation ? 'Getting Location...' : t.getCoordinates}
           </Text>
         </TouchableOpacity>
       </View>
@@ -3367,7 +4481,7 @@ export default function Reports() {
               >
                 <View style={[styles.checkbox, formData.activities?.extraction && styles.checkedBox]} />
                 <Text style={styles.activityText}>{t.extraction}</Text>
-                <Text style={styles.equipmentText}>{t.extractionEquipment}</Text>
+                
               </TouchableOpacity>
               
               <TouchableOpacity 
@@ -3376,7 +4490,7 @@ export default function Reports() {
               >
                 <View style={[styles.checkbox, formData.activities?.disposition && styles.checkedBox]} />
                 <Text style={styles.activityText}>{t.disposition}</Text>
-                <Text style={styles.equipmentText}>{t.dispositionEquipment}</Text>
+               
               </TouchableOpacity>
               
               <TouchableOpacity 
@@ -3385,7 +4499,7 @@ export default function Reports() {
               >
                 <View style={[styles.checkbox, formData.activities?.processing && styles.checkedBox]} />
                 <Text style={styles.activityText}>{t.processing}</Text>
-                <Text style={styles.equipmentText}>{t.processingEquipment}</Text>
+               
               </TouchableOpacity>
             </View>
           </View>
@@ -4569,9 +5683,16 @@ export default function Reports() {
             style={styles.dropdown}
             onPress={() => {
               const commodityOptions = [
+                'Sand and Gravel',
+                'Filling Materials', 
+                'Construction Aggregates',
+                'Rocks',
                 'Sand',
-                'Gravel', 
+                'Boulders',
+                'Base Course',
+                'Common Soil',
                 'Limestone',
+                'Silica',
                 'Others'
               ];
               
@@ -5226,8 +6347,14 @@ export default function Reports() {
               const commodityOptions = [
                 'Sand and Gravel',
                 'Filling Materials', 
-                'Aggregates',
+                'Construction Aggregates',
                 'Rocks',
+                'Sand',
+                'Boulders',
+                'Base Course',
+                'Common Soil',
+                'Limestone',
+                'Silica',
                 'Others'
               ];
               
@@ -6261,6 +7388,16 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginBottom: 4,
   },
+  detailSectionTitle: {
+    fontSize: 16,
+    color: COLORS.textPrimary,
+    fontWeight: '700',
+    marginTop: 8,
+    marginBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+    paddingBottom: 4,
+  },
   detailValue: {
     fontSize: 14,
     color: COLORS.textPrimary,
@@ -6554,19 +7691,20 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   activityRow: {
-    flexDirection: 'column',
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: COLORS.white,
     padding: 12,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: COLORS.border,
+    gap: 12,
   },
   activityText: {
     fontSize: 14,
     fontWeight: '600',
     color: COLORS.textPrimary,
-    marginLeft: 24,
-    marginBottom: 4,
+    flex: 1,
   },
   equipmentText: {
     fontSize: 12,
@@ -7080,6 +8218,8 @@ const styles = StyleSheet.create({
   imagePreviewOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.95)',
+    zIndex: 9999,
+    elevation: 9999,
   },
   imagePreviewHeader: {
     flexDirection: 'row',

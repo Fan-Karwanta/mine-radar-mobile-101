@@ -10,7 +10,7 @@ export const useAuthStore = create((set) => ({
   isLoading: false,
   isCheckingAuth: true,
 
-  register: async (username, email, password, completeName, agency, position, contactNumber) => {
+  register: async (email, password, completeName, agency, position, contactNumber) => {
     set({ isLoading: true });
     try {
       // Check network connectivity
@@ -25,7 +25,6 @@ export const useAuthStore = create((set) => ({
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          username,
           email,
           password,
           completeName,
@@ -116,7 +115,6 @@ export const useAuthStore = create((set) => ({
           token = authData.token;
           user = {
             id: authData.id,
-            username: authData.username,
             email: authData.email,
             completeName: authData.completeName,
             agency: authData.agency,

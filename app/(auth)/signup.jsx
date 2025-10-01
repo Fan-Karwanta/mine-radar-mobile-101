@@ -18,7 +18,6 @@ import { useRouter } from "expo-router";
 import { useAuthStore } from "../../store/authStore";
 
 export default function Signup() {
-  const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [completeName, setCompleteName] = useState("");
@@ -32,7 +31,7 @@ export default function Signup() {
   const router = useRouter();
 
   const handleSignUp = async () => {
-    const result = await register(username, email, password, completeName, agency, position, contactNumber);
+    const result = await register(email, password, completeName, agency, position, contactNumber);
 
     if (result.success) {
       router.replace("/(tabs)/directory");
@@ -79,27 +78,6 @@ export default function Signup() {
                   value={completeName}
                   onChangeText={setCompleteName}
                   autoCapitalize="words"
-                />
-              </View>
-            </View>
-
-            {/* USERNAME INPUT */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Username</Text>
-              <View style={styles.inputContainer}>
-                <Ionicons
-                  name="at-outline"
-                  size={20}
-                  color={COLORS.primary}
-                  style={styles.inputIcon}
-                />
-                <TextInput
-                  style={styles.input}
-                  placeholder="johndoe"
-                  placeholderTextColor={COLORS.placeholderText}
-                  value={username}
-                  onChangeText={setUsername}
-                  autoCapitalize="none"
                 />
               </View>
             </View>
