@@ -3363,7 +3363,11 @@ export default function Reports() {
               </TouchableOpacity>
             </View>
             
-            <ScrollView style={styles.detailScrollView}>
+            <ScrollView 
+              style={styles.detailScrollView}
+              showsVerticalScrollIndicator={true}
+              bounces={true}
+            >
               {/* Report Type */}
               <View style={styles.detailSection}>
                 <Text style={styles.detailLabel}>Report Type</Text>
@@ -4060,7 +4064,11 @@ export default function Reports() {
               </TouchableOpacity>
             </View>
             
-            <ScrollView style={styles.detailScrollView}>
+            <ScrollView 
+              style={styles.detailScrollView}
+              showsVerticalScrollIndicator={true}
+              bounces={true}
+            >
               {/* Report Type */}
               <View style={styles.detailSection}>
                 <Text style={styles.detailLabel}>Report Type</Text>
@@ -4316,7 +4324,11 @@ export default function Reports() {
 
           <Text style={styles.newReportLabel}>{language === 'english' ? 'New Report:' : 'Bagong Report:'}</Text>
           
-          <ScrollView style={styles.categoriesContainer}>
+          <ScrollView 
+            style={styles.categoriesContainer}
+            showsVerticalScrollIndicator={true}
+            bounces={true}
+          >
             {violationCategories.map((category, index) => (
               <CategoryCard key={category.id} category={category} index={index} />
             ))}
@@ -7443,7 +7455,8 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.white,
     borderRadius: 20,
     width: '90%',
-    height: '70%',
+    maxHeight: '80%',
+    marginVertical: 'auto',
   },
   // Commodity Picker Modal Styles
   commodityModalOverlay: {
@@ -7504,6 +7517,8 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.white,
     borderRadius: 20,
     width: '95%',
+    maxHeight: '90%',
+    marginVertical: 'auto',
     maxHeight: '90%',
   },
   modalHeader: {
@@ -8157,8 +8172,9 @@ const styles = StyleSheet.create({
   detailModalContent: {
     backgroundColor: COLORS.white,
     borderRadius: 20,
-    margin: 20,
-    maxHeight: '80%',
+    marginHorizontal: 20,
+    marginVertical: 'auto',
+    maxHeight: '85%',
     elevation: 5,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -8166,8 +8182,8 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
   },
   detailScrollView: {
-    maxHeight: 400,
     paddingHorizontal: 20,
+    flexGrow: 0,
   },
   detailSection: {
     marginBottom: 16,

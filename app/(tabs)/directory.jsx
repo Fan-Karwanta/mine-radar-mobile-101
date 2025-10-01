@@ -554,7 +554,11 @@ export default function Directory() {
           </View>
           
           {selectedRecord && (
-            <ScrollView style={styles.detailContent}>
+            <ScrollView 
+              style={styles.detailContent}
+              showsVerticalScrollIndicator={true}
+              bounces={true}
+            >
               <View style={styles.detailRow}>
                 <Text style={styles.detailLabel}>{selectedCategory?.id === 'hotspots' ? 'COMPLAINT NO:' : 'NO:'}</Text>
                 <Text style={styles.detailValue}>{selectedRecord.permitNumber}</Text> 
@@ -941,7 +945,8 @@ export default function Directory() {
                 isSelected={selectedCategory?.id === item.id}
               />
             )}
-            showsVerticalScrollIndicator={false}
+            showsVerticalScrollIndicator={true}
+            bounces={true}
             contentContainerStyle={styles.categoryListContainer}
           />
         </View>
@@ -1491,9 +1496,10 @@ const styles = StyleSheet.create({
   },
   categoryModalContent: {
     backgroundColor: COLORS.white,
-    borderRadius: 24,
-    width: '100%',
-    maxHeight: '90%',
+    borderRadius: 20,
+    width: '90%',
+    maxHeight: '80%',
+    marginVertical: 'auto',
     padding: 0,
     overflow: 'hidden',
     elevation: 8,
@@ -1595,8 +1601,8 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.white,
     borderRadius: 20,
     width: '90%',
-    maxHeight: '85%',
-    marginBottom: 20,
+    maxHeight: '80%',
+    marginVertical: 'auto',
   },
   detailModalHeader: {
     flexDirection: 'row',
@@ -1613,6 +1619,7 @@ const styles = StyleSheet.create({
   },
   detailContent: {
     padding: 20,
+    maxHeight: '100%',
   },
   detailRow: {
     marginBottom: 16,
