@@ -12,6 +12,7 @@ import {
   RefreshControl,
   TextInput,
   Linking,
+  Dimensions,
 } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
 import { Ionicons } from '@expo/vector-icons';
@@ -582,7 +583,7 @@ export default function Directory() {
               </View>
               
               <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>CLASSIFICATION:</Text>
+                <Text style={styles.detailLabel}>COMMODITY:</Text>
                 <Text style={styles.detailValue}>{selectedRecord.commodity}</Text>
               </View>
               
@@ -1534,14 +1535,14 @@ const styles = StyleSheet.create({
     marginRight: 16,
   },
   categoryModalTitle: {
-    fontSize: 22,
+    fontSize: 18,
     fontWeight: 'bold',
     color: COLORS.textPrimary,
     marginBottom: 4,
     letterSpacing: 0.5,
   },
   categoryModalSubtitle: {
-    fontSize: 14,
+    fontSize: 12,
     color: COLORS.textSecondary,
     lineHeight: 20,
   },
@@ -1601,8 +1602,9 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.white,
     borderRadius: 20,
     width: '90%',
-    maxHeight: '80%',
+    maxHeight: Dimensions.get('window').height * 0.88,
     marginVertical: 'auto',
+    overflow: 'hidden',
   },
   detailModalHeader: {
     flexDirection: 'row',
@@ -1619,7 +1621,9 @@ const styles = StyleSheet.create({
   },
   detailContent: {
     padding: 20,
-    maxHeight: '100%',
+    paddingTop: 16,
+    flexGrow: 0,
+    flexShrink: 1,
   },
   detailRow: {
     marginBottom: 16,

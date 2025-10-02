@@ -14,6 +14,7 @@ import {
   RefreshControl,
   ActivityIndicator,
   Image,
+  Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import COLORS from '../../constants/colors';
@@ -8174,16 +8175,19 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     marginHorizontal: 20,
     marginVertical: 'auto',
-    maxHeight: '85%',
+    maxHeight: Dimensions.get('window').height * 0.88,
     elevation: 5,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
     shadowRadius: 4,
+    overflow: 'hidden',
   },
   detailScrollView: {
     paddingHorizontal: 20,
+    paddingVertical: 16,
     flexGrow: 0,
+    flexShrink: 1,
   },
   detailSection: {
     marginBottom: 16,
