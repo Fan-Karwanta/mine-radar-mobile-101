@@ -26,6 +26,10 @@ export const API_BASE_URL = "https://mine-radar-backend-101.onrender.com/api";
  //export const API_URL = "http://192.168.18.149:3000/api"; 
  //export const API_BASE_URL = "http://192.168.18.149:3000/api";
 
+ // HRO WIFI
+ //export const API_URL = "http://192.168.137.203:3000/api"; 
+ //export const API_BASE_URL = "http://192.168.137.203:3000/api";
+
 // Google Maps API Key
 export const GOOGLE_MAPS_API_KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || "AIzaSyDmtWIGPGrC6E14RzN3z_tirQiOHJXVjWA";
 

@@ -59,7 +59,7 @@ const illegalMiningTranslations = {
     excavations: 'Excavations',
     accessRoad: 'Access road for transport',
     processingFacility: 'Mineral Processing Facility',
-    interviewNote: 'If no ongoing activities were seen during the verification, interview with residents or barangay officials are necessary to gather indicative information about the operation in the area. Guide questions are provided below.',
+    interviewNote: 'If no ongoing activities were seen during the verification, interview with residents or barangay officials are necessary to gather indicative information about the operation in the area. Guide questions are provided below. Check YES below if interview was conducted.',
     conductedInterview: 'Conducted interview?',
     yes: 'Yes',
     no: 'No',
@@ -464,7 +464,7 @@ const illegalSmallScaleMiningTranslations = {
     operating: 'Operating',
     nonOperating: 'Non-operating',
     activitiesObserved: 'Activities observed in the area: (check all that apply)',
-    equipmentUsed: 'Equipment used',
+    equipmentUsed: ' ',
     extraction: 'Extraction',
     extractionEquipment: 'Shovel/Others',
     disposition: 'Disposition/Transportation',
@@ -487,7 +487,7 @@ const illegalSmallScaleMiningTranslations = {
     mineShafts: 'Mine Shafts',
     accessRoad: 'Access road for transport',
     processingFacility: 'Mineral Processing Facility',
-    interviewNote: 'If no ongoing activities were seen during the verification, interview with residents or barangay officials are necessary to gather indicative information about the operation in the area. Guide questions are provided below.',
+    interviewNote: 'If no ongoing activities were seen during the verification, interview with residents or barangay officials are necessary to gather indicative information about the operation in the area. Guide questions are provided below. Check YES below if interview was conducted.',
     interviewConducted: 'Conducted interview?',
     yes: 'Yes',
     no: 'No',
@@ -528,7 +528,7 @@ const illegalSmallScaleMiningTranslations = {
     operating: 'Gumagana',
     nonOperating: 'Hindi gumagana',
     activitiesObserved: 'Mga aktibidad na nakita sa lugar: (piliin lahat ng naaangkop)',
-    equipmentUsed: 'Kagamitang ginamit',
+    equipmentUsed: ' ',
     extraction: 'Pagkuha',
     extractionEquipment: 'Pala/Iba pa',
     disposition: 'Disposition/Transportasyon',
@@ -703,9 +703,11 @@ export default function Reports() {
       disposition: false,
       processing: false
     },
-    extractionEquipment: [],
-    dispositionEquipment: [],
-    processingEquipment: [],
+    equipmentUsed: {
+      extraction: '',
+      disposition: '',
+      processing: ''
+    },
     operatorName: '',
     operatorAddress: '',
     operatorDetermination: '',
@@ -888,6 +890,16 @@ export default function Reports() {
       [parentField]: {
         ...prevData[parentField],
         [childField]: value
+      }
+    }));
+  }, []);
+
+  const updateEquipmentData = useCallback((equipment, value) => {
+    setFormData(prevData => ({
+      ...prevData,
+      equipmentUsed: {
+        ...prevData.equipmentUsed,
+        [equipment]: value
       }
     }));
   }, []);
@@ -1300,9 +1312,11 @@ export default function Reports() {
         disposition: false,
         processing: false
       },
-      extractionEquipment: [],
-      dispositionEquipment: [],
-      processingEquipment: [],
+      equipmentUsed: {
+        extraction: '',
+        disposition: '',
+        processing: ''
+      },
       operatorName: '',
       operatorAddress: '',
       operatorDetermination: '',
@@ -1539,15 +1553,16 @@ export default function Reports() {
               disposition: draft.miningData?.operatingActivities?.disposition?.active || false,
               processing: draft.miningData?.operatingActivities?.processing?.active || false
             },
-          extractionEquipment: useStoredFormData ? 
-            (draft.formData.extractionEquipment || []) :
-            (draft.miningData?.operatingActivities?.extraction?.equipment || []),
-          dispositionEquipment: useStoredFormData ? 
-            (draft.formData.dispositionEquipment || []) :
-            (draft.miningData?.operatingActivities?.disposition?.equipment || []),
-          processingEquipment: useStoredFormData ? 
-            (draft.formData.processingEquipment || []) :
-            (draft.miningData?.operatingActivities?.processing?.equipment || []),
+          equipmentUsed: useStoredFormData ? 
+            (draft.formData.equipmentUsed || {
+              extraction: '',
+              disposition: '',
+              processing: ''
+            }) : {
+              extraction: (draft.miningData?.operatingActivities?.extraction?.equipment || []).join(', '),
+              disposition: (draft.miningData?.operatingActivities?.disposition?.equipment || []).join(', '),
+              processing: (draft.miningData?.operatingActivities?.processing?.equipment || []).join(', ')
+            },
           nonOperatingObservations: useStoredFormData ? 
             (draft.formData.nonOperatingObservations || {
               excavations: false,
@@ -2496,6 +2511,18 @@ export default function Reports() {
           extraction: false,
           disposition: false,
           processing: false
+        }
+      }));
+    }
+    
+    // Initialize equipment object if it doesn't exist
+    if (!formData.equipmentUsed) {
+      setFormData(prev => ({
+        ...prev,
+        equipmentUsed: {
+          extraction: '',
+          disposition: '',
+          processing: ''
         }
       }));
     }
@@ -4534,33 +4561,58 @@ export default function Reports() {
         <View style={styles.operatingSection}>
           <View style={styles.checklistSection}>
             <Text style={styles.sectionLabel}>{t.activitiesObserved}</Text>
-            <View style={styles.activitiesContainer}>
+            
+            <View style={styles.checkboxContainer}>
               <TouchableOpacity 
-                style={styles.activityRow}
+                style={styles.checkboxRow}
                 onPress={() => updateNestedFormData('activities', 'extraction', !formData.activities?.extraction)}
               >
                 <View style={[styles.checkbox, formData.activities?.extraction && styles.checkedBox]} />
-                <Text style={styles.activityText}>{t.extraction}</Text>
-                
+                <Text style={styles.checkboxText}>{t.extraction}</Text>
               </TouchableOpacity>
+              {formData.activities?.extraction && (
+                <TextInput 
+                  style={styles.equipmentInput}
+                  placeholder={t.extractionEquipment}
+                  value={formData.equipmentUsed?.extraction}
+                  onChangeText={(text) => updateEquipmentData('extraction', text)}
+                  placeholderTextColor="#999"
+                />
+              )}
               
               <TouchableOpacity 
-                style={styles.activityRow}
+                style={styles.checkboxRow}
                 onPress={() => updateNestedFormData('activities', 'disposition', !formData.activities?.disposition)}
               >
                 <View style={[styles.checkbox, formData.activities?.disposition && styles.checkedBox]} />
-                <Text style={styles.activityText}>{t.disposition}</Text>
-               
+                <Text style={styles.checkboxText}>{t.disposition}</Text>
               </TouchableOpacity>
+              {formData.activities?.disposition && (
+                <TextInput 
+                  style={styles.equipmentInput}
+                  placeholder={t.dispositionEquipment}
+                  value={formData.equipmentUsed?.disposition}
+                  onChangeText={(text) => updateEquipmentData('disposition', text)}
+                  placeholderTextColor="#999"
+                />
+              )}
               
               <TouchableOpacity 
-                style={styles.activityRow}
+                style={styles.checkboxRow}
                 onPress={() => updateNestedFormData('activities', 'processing', !formData.activities?.processing)}
               >
                 <View style={[styles.checkbox, formData.activities?.processing && styles.checkedBox]} />
-                <Text style={styles.activityText}>{t.processing}</Text>
-               
+                <Text style={styles.checkboxText}>{t.processing}</Text>
               </TouchableOpacity>
+              {formData.activities?.processing && (
+                <TextInput 
+                  style={styles.equipmentInput}
+                  placeholder={t.processingEquipment}
+                  value={formData.equipmentUsed?.processing}
+                  onChangeText={(text) => updateEquipmentData('processing', text)}
+                  placeholderTextColor="#999"
+                />
+              )}
             </View>
           </View>
 
@@ -6569,102 +6621,103 @@ export default function Reports() {
               </TouchableOpacity>
             </View>
           </View>
-
-          {/* Interview Section */}
-          <View style={styles.checklistSection}>
-            <Text style={styles.interviewNote}>{ts.interviewNote}</Text>
-            <Text style={styles.sectionLabel}>{ts.conductedInterview}</Text>
-            <View style={styles.checkboxContainer}>
-              <TouchableOpacity 
-                style={styles.checkboxRow}
-                onPress={() => updateSmallScaleMiningFormData('conductedInterview', 'yes')}
-              >
-                <View style={[styles.checkbox, smallScaleMiningFormData.conductedInterview === 'yes' && styles.checkedBox]} />
-                <Text style={styles.checkboxText}>{ts.yes}</Text>
-              </TouchableOpacity>
-              <TouchableOpacity 
-                style={styles.checkboxRow}
-                onPress={() => updateSmallScaleMiningFormData('conductedInterview', 'no')}
-              >
-                <View style={[styles.checkbox, smallScaleMiningFormData.conductedInterview === 'no' && styles.checkedBox]} />
-                <Text style={styles.checkboxText}>{ts.no}</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          {/* Guide Questions - Only show if interview was conducted */}
-          {smallScaleMiningFormData.conductedInterview === 'yes' && (
-            <View style={styles.checklistSection}>
-              <Text style={styles.guideQuestionsTitle}>{ts.guideQuestions}</Text>
-              
-              <View style={styles.questionContainer}>
-                <Text style={styles.questionText}>1. {ts.question1}</Text>
-                <TextInput 
-                  style={styles.answerInput}
-                  placeholder={ts.answerHere}
-                  value={smallScaleMiningFormData.interviewAnswers.question1}
-                  onChangeText={(text) => updateSmallScaleMiningInterviewData('question1', text)}
-                  multiline
-                />
-              </View>
-              
-              <View style={styles.questionContainer}>
-                <Text style={styles.questionText}>2. {ts.question2}</Text>
-                <TextInput 
-                  style={styles.answerInput}
-                  placeholder={ts.answerHere}
-                  value={smallScaleMiningFormData.interviewAnswers.question2}
-                  onChangeText={(text) => updateSmallScaleMiningInterviewData('question2', text)}
-                  multiline
-                />
-              </View>
-              
-              <View style={styles.questionContainer}>
-                <Text style={styles.questionText}>3. {ts.question3}</Text>
-                <TextInput 
-                  style={styles.answerInput}
-                  placeholder={ts.answerHere}
-                  value={smallScaleMiningFormData.interviewAnswers.question3}
-                  onChangeText={(text) => updateSmallScaleMiningInterviewData('question3', text)}
-                  multiline
-                />
-              </View>
-              
-              <View style={styles.questionContainer}>
-                <Text style={styles.questionText}>4. {ts.question4}</Text>
-                <TextInput 
-                  style={styles.answerInput}
-                  placeholder={ts.answerHere}
-                  value={smallScaleMiningFormData.interviewAnswers.question4}
-                  onChangeText={(text) => updateSmallScaleMiningInterviewData('question4', text)}
-                  multiline
-                />
-              </View>
-              
-              <View style={styles.questionContainer}>
-                <Text style={styles.questionText}>5. {ts.question5}</Text>
-                <TextInput 
-                  style={styles.answerInput}
-                  placeholder={ts.answerHere}
-                  value={smallScaleMiningFormData.interviewAnswers.question5}
-                  onChangeText={(text) => updateSmallScaleMiningInterviewData('question5', text)}
-                  multiline
-                />
-              </View>
-              
-              <View style={styles.questionContainer}>
-                <Text style={styles.questionText}>6. {ts.question6}</Text>
-                <TextInput 
-                  style={styles.answerInput}
-                  placeholder={ts.answerHere}
-                  value={smallScaleMiningFormData.interviewAnswers.question6}
-                  onChangeText={(text) => updateSmallScaleMiningInterviewData('question6', text)}
-                  multiline
-                />
-              </View>
-            </View>
-          )}
         </>
+      )}
+
+      {/* Interview Section - For Both Operating and Non-Operating */}
+      <View style={styles.checklistSection}>
+        <Text style={styles.sectionLabel}>{ts.interviewTitle}</Text>
+        <Text style={styles.interviewNote}>{ts.interviewNote}</Text>
+        <Text style={styles.sectionLabel}>{ts.conductedInterview}</Text>
+        <View style={styles.checkboxContainer}>
+          <TouchableOpacity 
+            style={styles.checkboxRow}
+            onPress={() => updateSmallScaleMiningFormData('conductedInterview', 'yes')}
+          >
+            <View style={[styles.checkbox, smallScaleMiningFormData.conductedInterview === 'yes' && styles.checkedBox]} />
+            <Text style={styles.checkboxText}>{ts.yes}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={styles.checkboxRow}
+            onPress={() => updateSmallScaleMiningFormData('conductedInterview', 'no')}
+          >
+            <View style={[styles.checkbox, smallScaleMiningFormData.conductedInterview === 'no' && styles.checkedBox]} />
+            <Text style={styles.checkboxText}>{ts.no}</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* Guide Questions - Only show if interview was conducted */}
+      {smallScaleMiningFormData.conductedInterview === 'yes' && (
+        <View style={styles.guideQuestionsSection}>
+          <Text style={styles.guideQuestionsTitle}>{ts.guideQuestions}</Text>
+          
+          <View style={styles.questionContainer}>
+            <Text style={styles.questionText}>1. {ts.question1}</Text>
+            <TextInput 
+              style={[styles.textInput, styles.answerInput]}
+              placeholder={ts.answerHere}
+              value={smallScaleMiningFormData.interviewAnswers.question1}
+              onChangeText={(text) => updateSmallScaleMiningInterviewData('question1', text)}
+              multiline
+            />
+          </View>
+          
+          <View style={styles.questionContainer}>
+            <Text style={styles.questionText}>2. {ts.question2}</Text>
+            <TextInput 
+              style={[styles.textInput, styles.answerInput]}
+              placeholder={ts.answerHere}
+              value={smallScaleMiningFormData.interviewAnswers.question2}
+              onChangeText={(text) => updateSmallScaleMiningInterviewData('question2', text)}
+              multiline
+            />
+          </View>
+          
+          <View style={styles.questionContainer}>
+            <Text style={styles.questionText}>3. {ts.question3}</Text>
+            <TextInput 
+              style={[styles.textInput, styles.answerInput]}
+              placeholder={ts.answerHere}
+              value={smallScaleMiningFormData.interviewAnswers.question3}
+              onChangeText={(text) => updateSmallScaleMiningInterviewData('question3', text)}
+              multiline
+            />
+          </View>
+          
+          <View style={styles.questionContainer}>
+            <Text style={styles.questionText}>4. {ts.question4}</Text>
+            <TextInput 
+              style={[styles.textInput, styles.answerInput]}
+              placeholder={ts.answerHere}
+              value={smallScaleMiningFormData.interviewAnswers.question4}
+              onChangeText={(text) => updateSmallScaleMiningInterviewData('question4', text)}
+              multiline
+            />
+          </View>
+          
+          <View style={styles.questionContainer}>
+            <Text style={styles.questionText}>5. {ts.question5}</Text>
+            <TextInput 
+              style={[styles.textInput, styles.answerInput]}
+              placeholder={ts.answerHere}
+              value={smallScaleMiningFormData.interviewAnswers.question5}
+              onChangeText={(text) => updateSmallScaleMiningInterviewData('question5', text)}
+              multiline
+            />
+          </View>
+          
+          <View style={styles.questionContainer}>
+            <Text style={styles.questionText}>6. {ts.question6}</Text>
+            <TextInput 
+              style={[styles.textInput, styles.answerInput]}
+              placeholder={ts.answerHere}
+              value={smallScaleMiningFormData.interviewAnswers.question6}
+              onChangeText={(text) => updateSmallScaleMiningInterviewData('question6', text)}
+              multiline
+            />
+          </View>
+        </View>
       )}
 
       {/* Common Fields for Both Operating and Non-Operating */}

@@ -8,6 +8,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Alert,
+  Modal,
 } from "react-native";
 import { Link, useRouter } from "expo-router";
 import styles from "../../assets/styles/login.styles";
@@ -21,6 +22,7 @@ export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [showBlockedModal, setShowBlockedModal] = useState(false);
   const { isLoading, login, isCheckingAuth } = useAuthStore();
   const router = useRouter();
 
@@ -29,6 +31,9 @@ export default function Login() {
 
     if (result.success) {
       router.replace("/(tabs)/directory");
+    } else if (result.blocked) {
+      // Show blocked modal instead of alert
+      setShowBlockedModal(true);
     } else {
       Alert.alert("Error", result.error);
     }
@@ -135,6 +140,46 @@ export default function Login() {
             </View>
           </View>
         </View>
+
+        {/* BLOCKED USER MODAL */}
+        <Modal
+          visible={showBlockedModal}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={() => setShowBlockedModal(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContainer}>
+              <View style={styles.modalIconContainer}>
+                <Ionicons name="ban" size={60} color="#EF4444" />
+              </View>
+              
+              <Text style={styles.modalTitle}>Account Blocked</Text>
+              
+              <Text style={styles.modalMessage}>
+                Your account has been blocked by the administrator.
+              </Text>
+              
+              <Text style={styles.modalSubMessage}>
+                Please contact MGB CALABARZON for support and assistance.
+              </Text>
+              
+              <View style={styles.modalContactInfo}>
+                <View style={styles.contactRow}>
+                  <Ionicons name="call" size={18} color={COLORS.primary} />
+                  <Text style={styles.contactText}>Contact Admin Support</Text>
+                </View>
+              </View>
+              
+              <TouchableOpacity
+                style={styles.modalButton}
+                onPress={() => setShowBlockedModal(false)}
+              >
+                <Text style={styles.modalButtonText}>Close</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
       </View>
     </KeyboardAvoidingView>
   );

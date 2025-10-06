@@ -31,7 +31,13 @@ class ReportService {
       formData.append('location', reportData.location || '');
       formData.append('incidentDate', reportData.date || '');
       formData.append('incidentTime', reportData.time || '');
-      formData.append('commodity', reportData.commodity || '');
+      
+      // Handle commodity - if "Others" is selected, use commodityOther value
+      const commodityValue = reportData.commodity === 'Others' && reportData.commodityOther 
+        ? reportData.commodityOther 
+        : reportData.commodity || '';
+      formData.append('commodity', commodityValue);
+      
       formData.append('additionalInfo', reportData.additionalInfo || '');
       
       // Add project info if applicable
@@ -251,7 +257,13 @@ class ReportService {
       formData.append('location', reportData.location || '');
       formData.append('incidentDate', reportData.date || '');
       formData.append('incidentTime', reportData.time || '');
-      formData.append('commodity', reportData.commodity || '');
+      
+      // Handle commodity - if "Others" is selected, use commodityOther value
+      const commodityValue = reportData.commodity === 'Others' && reportData.commodityOther 
+        ? reportData.commodityOther 
+        : reportData.commodity || '';
+      formData.append('commodity', commodityValue);
+      
       formData.append('additionalInfo', reportData.additionalInfo || '');
       
       // Add project info if applicable
@@ -372,7 +384,13 @@ class ReportService {
       formData.append('location', reportData.location || '');
       formData.append('incidentDate', reportData.date || '');
       formData.append('incidentTime', reportData.time || '');
-      formData.append('commodity', reportData.commodity || '');
+      
+      // Handle commodity - if "Others" is selected, use commodityOther value
+      const commodityValue = reportData.commodity === 'Others' && reportData.commodityOther 
+        ? reportData.commodityOther 
+        : reportData.commodity || '';
+      formData.append('commodity', commodityValue);
+      
       formData.append('additionalInfo', reportData.additionalInfo || '');
       
       // Add project info if applicable
@@ -472,19 +490,25 @@ class ReportService {
   
   // Helper methods to prepare type-specific data
   prepareMiningData(reportData) {
+    // Convert equipment strings to arrays by splitting on common delimiters
+    const parseEquipment = (equipmentString) => {
+      if (!equipmentString || equipmentString.trim() === '') return [];
+      return equipmentString.split(/[,/]/).map(item => item.trim()).filter(item => item.length > 0);
+    };
+
     return {
       operatingActivities: {
         extraction: {
           active: reportData.activities?.extraction || false,
-          equipment: reportData.extractionEquipment || []
+          equipment: parseEquipment(reportData.equipmentUsed?.extraction || '')
         },
         disposition: {
           active: reportData.activities?.disposition || false,
-          equipment: reportData.dispositionEquipment || []
+          equipment: parseEquipment(reportData.equipmentUsed?.disposition || '')
         },
         processing: {
           active: reportData.activities?.processing || false,
-          equipment: reportData.processingEquipment || []
+          equipment: parseEquipment(reportData.equipmentUsed?.processing || '')
         }
       },
       nonOperatingObservations: reportData.nonOperatingObservations || {

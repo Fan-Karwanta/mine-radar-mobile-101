@@ -36,7 +36,11 @@ export const useAuthStore = create((set) => ({
 
       const data = await response.json();
 
-      if (!response.ok) throw new Error(data.message || "Something went wrong");
+      if (!response.ok) {
+        const errorMessage = data.details || data.message || "Something went wrong";
+        console.log("Registration error:", errorMessage);
+        throw new Error(errorMessage);
+      }
 
       // Save to AsyncStorage
       await AsyncStorage.setItem("user", JSON.stringify(data.user));
@@ -79,6 +83,12 @@ export const useAuthStore = create((set) => ({
       });
 
       const data = await response.json();
+
+      // Check if user is blocked (403 status)
+      if (response.status === 403 && data.blocked) {
+        set({ isLoading: false });
+        return { success: false, blocked: true, error: data.message };
+      }
 
       if (!response.ok) throw new Error(data.message || "Something went wrong");
 
@@ -130,6 +140,16 @@ export const useAuthStore = create((set) => ({
           await AsyncStorage.setItem("token", token);
           await AsyncStorage.setItem("user", JSON.stringify(user));
         }
+      }
+
+      // Check if user is blocked - if so, log them out
+      if (user && user.status === 'blocked') {
+        console.log("User is blocked, logging out...");
+        await AsyncStorage.removeItem("token");
+        await AsyncStorage.removeItem("user");
+        await asyncStorageOfflineService.clearAuthData();
+        set({ token: null, user: null });
+        return;
       }
 
       set({ token, user });
